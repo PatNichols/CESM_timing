@@ -1,0 +1,167 @@
+Checking file env_build.xml.locked
+Checking file env_case.xml.locked
+Checking file env_mach_pes.xml.locked
+Locked files dir: Run::RunChecks/LockedFiles
+   purge  
+   load ncarenv/1.0 
+   load ncarbinlibs/1.1 
+   load perlmods 
+   load gmake/4.1 
+   load python 
+   load all-python-libs 
+   load intel/15.0.3 
+   load mkl/11.1.2 
+   load trilinos/11.10.2 
+   load esmf 
+   load esmf-6.3.0rp1-defio-mpi-O 
+   load netcdf-mpi/4.3.3.1 
+   load pnetcdf/1.6.1 
+   load ncarcompilers/1.0 
+   load cmake/3.0.2 
+setting environment variable MP_INFOLEVEL=2
+setting environment variable MP_STDOUTMODE=unordered
+setting environment variable MP_EUILIB=us
+setting environment variable MP_RC_USE_LMC=yes
+setting environment variable OMP_STACKSIZE=256M
+No variable MPILIB found, not setting MP_MPILIB
+setting environment variable MP_SHARED_MEMORY=yes
+setting environment variable MP_LABELIO=yes
+-------------------------------------------------------------------------
+ BUILDNML SCRIPT STARTING
+ - To prestage restarts, untar a restart.tar file into /glade/scratch/pnichols/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/run
+   purge  
+   load ncarenv/1.0 
+   load ncarbinlibs/1.1 
+   load perlmods 
+   load gmake/4.1 
+   load python 
+   load all-python-libs 
+   load intel/15.0.3 
+   load mkl/11.1.2 
+   load trilinos/11.10.2 
+   load esmf 
+   load esmf-6.3.0rp1-defio-mpi-O 
+   load netcdf-mpi/4.3.3.1 
+   load pnetcdf/1.6.1 
+   load ncarcompilers/1.0 
+   load cmake/3.0.2 
+setting environment variable MP_INFOLEVEL=2
+setting environment variable MP_STDOUTMODE=unordered
+setting environment variable MP_EUILIB=us
+setting environment variable MP_RC_USE_LMC=yes
+setting environment variable OMP_STACKSIZE=256M
+No variable MPILIB found, not setting MP_MPILIB
+setting environment variable MP_SHARED_MEMORY=yes
+setting environment variable MP_LABELIO=yes
+     Calling /glade/p/work/pnichols/cesm1_5_alpha04c/components/cam/cime_config/buildnml 
+CAM build-namelist - INFO: Chem flbc_file in use. co2vmr = 284.7e-6 removed from namelist.
+CAM writing dry deposition namelist to drv_flds_in 
+Writing ocean component namelist to ./docn_in 
+CAM writing namelist to atm_in 
+     Calling /glade/p/work/pnichols/cesm1_5_alpha04c/components/clm/cime_config/buildnml 
+CLM configure done.
+CLM adding use_case 1850_control defaults for var 'sim_year' with val '1850'
+CLM adding use_case 1850_control defaults for var 'sim_year_range' with val 'constant'
+CLM adding use_case 1850_control defaults for var 'stream_year_first_ndep' with val '1850'
+CLM adding use_case 1850_control defaults for var 'stream_year_last_ndep' with val '1850'
+CLM adding use_case 1850_control defaults for var 'use_case_desc' with val 'Conditions to simulate 1850 land-use'
+     Calling /glade/p/work/pnichols/cesm1_5_alpha04c/components/cice/cime_config/buildnml 
+cice : physics         is cice4 
+CICE configure done.
+     Calling /glade/p/work/pnichols/cesm1_5_alpha04c/cime/components/data_comps/docn/cime_config/buildnml 
+     Calling /glade/p/work/pnichols/cesm1_5_alpha04c/cime/components/stub_comps/sglc/cime_config/buildnml 
+     Calling /glade/p/work/pnichols/cesm1_5_alpha04c/cime/components/stub_comps/swav/cime_config/buildnml 
+     Calling /glade/p/work/pnichols/cesm1_5_alpha04c/components/rtm/cime_config/buildnml 
+     Calling /glade/p/work/pnichols/cesm1_5_alpha04c/cime/driver_cpl/cime_config/buildnml 
+ infile is /glade/p/work/pnichols/cesm1_5_alpha04c/cime/scripts/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/Buildconf/cplconf/namelist 
+ BUILDNML SCRIPT HAS FINISHED SUCCESSFULLY
+-------------------------------------------------------------------------
+ PRESTAGE SCRIPT STARTING
+ - Case input data directory, DIN_LOC_ROOT, is /glade/p/cesmdata/cseg/inputdata
+ - Checking the existence of input datasets in DIN_LOC_ROOT
+Wed Feb 10 16:12:02 2016 MODEL EXECUTION BEGINS HERE
+Wed Feb 10 16:14:29 2016 MODEL EXECUTION HAS FINISHED
+running timing script..
+gzipping timing stats..
+Locked files dir: Run::RunChecks/LockedFiles
+   purge  
+   load ncarenv/1.0 
+   load ncarbinlibs/1.1 
+   load perlmods 
+   load gmake/4.1 
+   load python 
+   load all-python-libs 
+   load intel/15.0.3 
+   load mkl/11.1.2 
+   load trilinos/11.10.2 
+   load esmf 
+   load esmf-6.3.0rp1-defio-mpi-O 
+   load netcdf-mpi/4.3.3.1 
+   load pnetcdf/1.6.1 
+   load ncarcompilers/1.0 
+   load cmake/3.0.2 
+setting environment variable MP_INFOLEVEL=2
+setting environment variable MP_STDOUTMODE=unordered
+setting environment variable MP_EUILIB=us
+setting environment variable MP_RC_USE_LMC=yes
+setting environment variable OMP_STACKSIZE=256M
+No variable MPILIB found, not setting MP_MPILIB
+setting environment variable MP_SHARED_MEMORY=yes
+setting environment variable MP_LABELIO=yes
+-------------------------------------------------------------------------
+ BUILDNML SCRIPT STARTING
+ - To prestage restarts, untar a restart.tar file into /glade/scratch/pnichols/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/run
+   purge  
+   load ncarenv/1.0 
+   load ncarbinlibs/1.1 
+   load perlmods 
+   load gmake/4.1 
+   load python 
+   load all-python-libs 
+   load intel/15.0.3 
+   load mkl/11.1.2 
+   load trilinos/11.10.2 
+   load esmf 
+   load esmf-6.3.0rp1-defio-mpi-O 
+   load netcdf-mpi/4.3.3.1 
+   load pnetcdf/1.6.1 
+   load ncarcompilers/1.0 
+   load cmake/3.0.2 
+setting environment variable MP_INFOLEVEL=2
+setting environment variable MP_STDOUTMODE=unordered
+setting environment variable MP_EUILIB=us
+setting environment variable MP_RC_USE_LMC=yes
+setting environment variable OMP_STACKSIZE=256M
+No variable MPILIB found, not setting MP_MPILIB
+setting environment variable MP_SHARED_MEMORY=yes
+setting environment variable MP_LABELIO=yes
+     Calling /glade/p/work/pnichols/cesm1_5_alpha04c/components/cam/cime_config/buildnml 
+CAM build-namelist - INFO: Chem flbc_file in use. co2vmr = 284.7e-6 removed from namelist.
+CAM writing dry deposition namelist to drv_flds_in 
+Writing ocean component namelist to ./docn_in 
+CAM writing namelist to atm_in 
+     Calling /glade/p/work/pnichols/cesm1_5_alpha04c/components/clm/cime_config/buildnml 
+CLM configure done.
+CLM adding use_case 1850_control defaults for var 'sim_year' with val '1850'
+CLM adding use_case 1850_control defaults for var 'sim_year_range' with val 'constant'
+CLM adding use_case 1850_control defaults for var 'stream_year_first_ndep' with val '1850'
+CLM adding use_case 1850_control defaults for var 'stream_year_last_ndep' with val '1850'
+CLM adding use_case 1850_control defaults for var 'use_case_desc' with val 'Conditions to simulate 1850 land-use'
+     Calling /glade/p/work/pnichols/cesm1_5_alpha04c/components/cice/cime_config/buildnml 
+cice : physics         is cice4 
+CICE configure done.
+     Calling /glade/p/work/pnichols/cesm1_5_alpha04c/cime/components/data_comps/docn/cime_config/buildnml 
+     Calling /glade/p/work/pnichols/cesm1_5_alpha04c/cime/components/stub_comps/sglc/cime_config/buildnml 
+     Calling /glade/p/work/pnichols/cesm1_5_alpha04c/cime/components/stub_comps/swav/cime_config/buildnml 
+     Calling /glade/p/work/pnichols/cesm1_5_alpha04c/components/rtm/cime_config/buildnml 
+     Calling /glade/p/work/pnichols/cesm1_5_alpha04c/cime/driver_cpl/cime_config/buildnml 
+ infile is /glade/p/work/pnichols/cesm1_5_alpha04c/cime/scripts/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/Buildconf/cplconf/namelist 
+ BUILDNML SCRIPT HAS FINISHED SUCCESSFULLY
+-------------------------------------------------------------------------
+ PRESTAGE SCRIPT STARTING
+ - Case input data directory, DIN_LOC_ROOT, is /glade/p/cesmdata/cseg/inputdata
+ - Checking the existence of input datasets in DIN_LOC_ROOT
+Wed Feb 10 16:15:07 2016 MODEL EXECUTION BEGINS HERE
+Wed Feb 10 16:17:13 2016 MODEL EXECUTION HAS FINISHED
+running timing script..
+gzipping timing stats..

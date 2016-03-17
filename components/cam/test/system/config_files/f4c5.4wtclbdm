@@ -1,0 +1,8 @@
+-spmd -nosmp
+-chem waccm_tsmlt_mam3
+-dyn fv
+-res 4x5
+-phys cam5.4
+-clubb_sgs
+-debug
+-s

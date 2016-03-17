@@ -1,0 +1,34 @@
+<?xml version="1.0"?>
+
+<namelist_defaults>
+
+<ncdata hgrid="64x128"  nlev="30" >atm/cam/inic/gaus/cami_LC1_64x128_L30_c150603.nc</ncdata>
+<ncdata hgrid="64x128"  nlev="60" >atm/cam/inic/gaus/cami_LC1_64x128_L60_c150603.nc</ncdata>
+<ncdata hgrid="64x128"  nlev="120">atm/cam/inic/gaus/cami_LC1_64x128_L120_c150603.nc</ncdata>
+
+<ncdata hgrid="128x256" nlev="30" >atm/cam/inic/gaus/cami_LC1_128x256_L30_c150603.nc</ncdata>
+<ncdata hgrid="128x256" nlev="60" >atm/cam/inic/gaus/cami_LC1_128x256_L60_c150603.nc</ncdata>
+<ncdata hgrid="128x256" nlev="120">atm/cam/inic/gaus/cami_LC1_128x256_L120_c150603.nc</ncdata>
+
+<ncdata hgrid="256x512" nlev="30" >atm/cam/inic/gaus/cami_LC1_256x512_L30_c150603.nc</ncdata>
+<ncdata hgrid="256x512" nlev="60" >atm/cam/inic/gaus/cami_LC1_256x512_L60_c150603.nc</ncdata>
+<ncdata hgrid="256x512" nlev="120">atm/cam/inic/gaus/cami_LC1_256x512_L120_c150603.nc</ncdata>
+
+<!-- Force PHIS to be set to zero -->
+<use_topo_file>.false.</use_topo_file>
+
+<!-- names of passive tracers in the LC1 initial files -->
+<test_tracer_names>
+'strat', 'tropo', 'th320', 'th340', 'wrt'
+</test_tracer_names>
+
+<!-- history output customization -->
+<empty_htapes>.true.</empty_htapes>
+<avgflag_pertape>'I'</avgflag_pertape>
+<nhtfrq>-6</nhtfrq>
+<mfilt>120</mfilt>
+<fincl1>
+ 'U','V','T','PS','strat','tropo','th320','th340','wrt'
+</fincl1>
+
+</namelist_defaults>

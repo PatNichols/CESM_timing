@@ -1,0 +1,2 @@
+set \$SRCROOT = `./xmlquery SRCROOT -value`
+./xmlchange -append CAM_CONFIG_OPTS="-usr_mech_infile \$SRCROOT/components/cam/test/system/config_files/testmech -build_chem_proc"

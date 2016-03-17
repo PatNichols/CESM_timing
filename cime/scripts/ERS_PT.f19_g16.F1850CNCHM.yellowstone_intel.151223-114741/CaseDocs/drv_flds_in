@@ -1,0 +1,13 @@
+&drydep_inparm
+ drydep_list		= 'CH2O','CH3OOH','CO','H2O2','HNO3','NO','NO2','O3','SO2','SO4'
+ drydep_method		= 'xactive_lnd'
+/
+&megan_emis_nl
+ megan_factors_file		= '/glade/p/cesmdata/cseg/inputdata/atm/cam/chem/trop_mozart/emis/megan21_emis_factors_c20130304.nc'
+ megan_mapped_emisfctrs		= .true.
+ megan_specifier		= 'ISOP = isoprene'
+/
+&fire_emis_nl
+/
+&carma_inparm
+/

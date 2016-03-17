@@ -1,0 +1,14 @@
+env_run.xml:1544: parser error : Premature end of data in tag entry line 1541
+   
+   ^
+env_run.xml:1544: parser error : Premature end of data in tag config_definition line 3
+   
+   ^
+Uncaught exception from user code:
+	Could not create directory  at ./preview_namelists line 137
+ at ./preview_namelists line 137
+Uncaught exception from user code:
+	ERROR from preview namelist - EXITING at /glade/u/spooldir/1450897570.906153.shell line 242
+ at /glade/u/spooldir/1450897570.906153.shell line 242
+	main::doPreRunChecks() called at /glade/u/spooldir/1450897570.906153.shell line 94
+	main::main() called at /glade/u/spooldir/1450897570.906153.shell line 105

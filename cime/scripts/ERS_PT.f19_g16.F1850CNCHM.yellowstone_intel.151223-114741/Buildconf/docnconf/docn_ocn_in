@@ -1,0 +1,11 @@
+&shr_strdata_nml
+ datamode = 'SSTDATA'
+ domainfile = '/glade/p/cesmdata/cseg/inputdata/share/domains/domain.ocn.gx1v6.090206.nc'
+ fillalgo = 'nn'
+ fillmask = 'nomask'
+ mapalgo = 'bilinear'
+ mapmask = 'dstmask'
+ streams = "docn.streams.txt.prescribed 1 0 0"
+ taxmode = 'cycle'
+ tintalgo = 'linear'
+/

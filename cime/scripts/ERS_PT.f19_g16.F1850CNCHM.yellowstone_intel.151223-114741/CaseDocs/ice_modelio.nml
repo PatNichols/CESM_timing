@@ -1,0 +1,11 @@
+&modelio
+ diri = '/glade/scratch/pnichols/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/bld/ice'
+ diro = '/glade/scratch/pnichols/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/run'
+ logfile = 'ice.log.160211-145501'
+/
+&pio_inparm
+ pio_numiotasks = -99
+ pio_root = -99
+ pio_stride = -99
+ pio_typename = 'nothing'
+/

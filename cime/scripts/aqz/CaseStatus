@@ -1,0 +1,8 @@
+create_newcase -case aqz -res ne30_ne30 -compset FC5AQUAP -compiler intel -mach yellowstone
+case created 2015-12-23 15:54:54
+case.setup 2015-12-23 15:55:26
+ 
+build complete 2015-12-23 16:03:34
+
+run started 2015-12-23 17:42:32
+run SUCCESSFUL 2015-12-23 17:45:36

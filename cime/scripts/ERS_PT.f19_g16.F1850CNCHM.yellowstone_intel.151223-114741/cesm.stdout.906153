@@ -1,0 +1,54 @@
+Locked files dir: Run::RunChecks/LockedFiles
+   purge  
+   load ncarenv/1.0 
+   load ncarbinlibs/1.1 
+   load perlmods 
+   load gmake/4.1 
+   load python 
+   load all-python-libs 
+   load intel/15.0.3 
+   load mkl/11.1.2 
+   load trilinos/11.10.2 
+   load esmf 
+   load esmf-6.3.0rp1-defio-mpi-O 
+   load netcdf-mpi/4.3.3.1 
+   load pnetcdf/1.6.1 
+   load ncarcompilers/1.0 
+   load cmake/3.0.2 
+setting environment variable MP_INFOLEVEL=2
+setting environment variable MP_STDOUTMODE=unordered
+setting environment variable MP_EUILIB=us
+setting environment variable MP_RC_USE_LMC=yes
+setting environment variable OMP_STACKSIZE=256M
+No variable MPILIB found, not setting MP_MPILIB
+setting environment variable MP_SHARED_MEMORY=yes
+setting environment variable MP_LABELIO=yes
+-------------------------------------------------------------------------
+ BUILDNML SCRIPT STARTING
+ - To prestage restarts, untar a restart.tar file into /glade/scratch/pnichols/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/run
+   purge  
+   load ncarenv/1.0 
+   load ncarbinlibs/1.1 
+   load perlmods 
+   load gmake/4.1 
+   load python 
+   load all-python-libs 
+   load intel/15.0.3 
+   load mkl/11.1.2 
+   load trilinos/11.10.2 
+   load esmf 
+   load esmf-6.3.0rp1-defio-mpi-O 
+   load netcdf-mpi/4.3.3.1 
+   load pnetcdf/1.6.1 
+   load ncarcompilers/1.0 
+   load cmake/3.0.2 
+setting environment variable MP_INFOLEVEL=2
+setting environment variable MP_STDOUTMODE=unordered
+setting environment variable MP_EUILIB=us
+setting environment variable MP_RC_USE_LMC=yes
+setting environment variable OMP_STACKSIZE=256M
+No variable MPILIB found, not setting MP_MPILIB
+setting environment variable MP_SHARED_MEMORY=yes
+setting environment variable MP_LABELIO=yes
+Could not create directory 
+ERROR from preview namelist - EXITING

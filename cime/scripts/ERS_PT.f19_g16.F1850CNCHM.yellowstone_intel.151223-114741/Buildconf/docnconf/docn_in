@@ -1,0 +1,5 @@
+&docn_nml
+ decomp = '1d'
+ force_prognostic_true = .false.
+ ocn_in = 'docn_ocn_in'
+/

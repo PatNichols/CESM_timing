@@ -1,0 +1,10 @@
+cime                               https://github.com/CESM-Development/cime/tags/cime4.3.3
+components/cam                     https://svn-ccsm-models.cgd.ucar.edu/cam1/branch_tags/cam5_4_30_piosefix_tags/n01/components/cam
+components/clm                     https://svn-ccsm-models.cgd.ucar.edu/clm2/trunk_tags/clm4_5_6_r159/components/clm
+components/cice                    https://svn-ccsm-models.cgd.ucar.edu/cice/trunk_tags/cice5_20151209
+components/pop                     https://svn-ccsm-models.cgd.ucar.edu/pop2/trunk_tags/cesm_pop_2_1_20151123
+components/cism                    https://svn-ccsm-models.cgd.ucar.edu/glc/trunk_tags/cism2_1_10
+components/aquap                   https://svn-ccsm-models.cgd.ucar.edu/aquap/trunk_tags/aquap_151016
+components/rtm                     https://svn-ccsm-models.cgd.ucar.edu/rivrtm/trunk_tags/rtm1_0_54
+components/ww3                     https://svn-ccsm-models.cgd.ucar.edu/ww3/trunk_tags/ww3_151016
+components/mosart                  https://svn-ccsm-models.cgd.ucar.edu/mosart/trunk_tags/mosart1_0_11

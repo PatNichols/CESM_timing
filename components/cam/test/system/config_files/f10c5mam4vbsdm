@@ -1,0 +1,7 @@
+-spmd -nosmp
+-chem trop_strat_mam4_vbs
+-dyn fv
+-res 10x15
+-phys cam5
+-debug
+-s

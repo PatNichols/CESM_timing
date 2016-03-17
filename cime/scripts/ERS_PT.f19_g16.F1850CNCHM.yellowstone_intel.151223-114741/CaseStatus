@@ -1,0 +1,148 @@
+test created with the following options:
+case: ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741 casebaseid: ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel compiler: intel compset: F1850CNCHM confopts: _PT fullname: ERS_PT grid: f19_g16 mach: yellowstone status: SFAIL test_argv: -testname ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel -testroot /glade/p/work/pnichols/cesm1_5_alpha04c/cime/scripts  testname: ERS 
+
+create_newcase -loglevel INFO -case /glade/p/work/pnichols/cesm1_5_alpha04c/cime/scripts/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741 -res f19_g16 -mach yellowstone -compset F1850CNCHM -testname ERS -confopts _PT -mach_dir /glade/p/work/pnichols/cesm1_5_alpha04c/cime/cime_config/cesm/machines -compiler intel
+SFAIL ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741
+case.setup 2015-12-23 11:48:11
+ 
+case.setup 2015-12-23 11:48:40
+ 
+build complete 2015-12-23 11:59:09
+
+test started 2015-12-23 13:50:50
+test started 2015-12-23 13:50:50
+run started 2015-12-23 13:50:51
+<command>xmlchange -file env_run.xml -id CONTINUE_RUN -val FALSE</command>
+<command>xmlchange -file env_run.xml -id CONTINUE_RUN -val FALSE</command>
+<command>xmlchange -file env_run.xml -id STOP_N -val 11</command>
+<command>xmlchange -file env_run.xml -id STOP_N -val 11</command>
+<command>xmlchange -file env_run.xml -id REST_OPTION -val ndays</command>
+<command>xmlchange -file env_run.xml -id REST_OPTION -val ndays</command>
+<command>xmlchange -file env_run.xml -id REST_N -val 6</command>
+<command>xmlchange -file env_run.xml -id REST_N -val 6</command>
+<command>xmlchange -file env_run.xml -id HIST_OPTION -val ndays</command>
+<command>xmlchange -file env_run.xml -id HIST_OPTION -val ndays</command>
+<command>xmlchange -file env_run.xml -id HIST_N -val 11</command>
+<command>xmlchange -file env_run.xml -id HIST_N -val 11</command>
+run started 2015-12-23 13:50:54
+run started 2015-12-23 13:50:54
+run SUCCESSFUL 2015-12-23 13:53:26
+<command>xmlchange -file env_run.xml -id CONTINUE_RUN -val TRUE</command>
+<command>xmlchange -file env_run.xml -id STOP_N -val 5</command>
+<command>xmlchange -file env_run.xml -id REST_OPTION -val never</command>
+<command>xmlchange -file env_run.xml -id HIST_OPTION -val ndays</command>
+<command>xmlchange -file env_run.xml -id HIST_N -val 11</command>
+run started 2015-12-23 13:53:31
+run SUCCESSFUL 2015-12-23 13:55:51
+test completed 2015-12-23 13:55:55
+clean_build complete 2016-02-01 16:10:44
+
+case.setup 2016-02-01 16:11:13
+ 
+build complete 2016-02-01 16:18:40
+
+test started 2016-02-01 16:22:03
+<command>xmlchange -file env_run.xml -id CONTINUE_RUN -val FALSE</command>
+<command>xmlchange -file env_run.xml -id STOP_N -val 11</command>
+<command>xmlchange -file env_run.xml -id REST_OPTION -val ndays</command>
+<command>xmlchange -file env_run.xml -id REST_N -val 6</command>
+<command>xmlchange -file env_run.xml -id HIST_OPTION -val ndays</command>
+<command>xmlchange -file env_run.xml -id HIST_N -val 11</command>
+run started 2016-02-01 16:22:06
+run SUCCESSFUL 2016-02-01 16:24:42
+<command>xmlchange -file env_run.xml -id CONTINUE_RUN -val TRUE</command>
+<command>xmlchange -file env_run.xml -id STOP_N -val 5</command>
+<command>xmlchange -file env_run.xml -id REST_OPTION -val never</command>
+<command>xmlchange -file env_run.xml -id HIST_OPTION -val ndays</command>
+<command>xmlchange -file env_run.xml -id HIST_N -val 11</command>
+run started 2016-02-01 16:24:47
+run SUCCESSFUL 2016-02-01 16:27:07
+test completed 2016-02-01 16:27:11
+clean_build complete 2016-02-04 12:29:40
+
+build complete 2016-02-04 12:40:30
+
+test started 2016-02-04 14:49:35
+<command>xmlchange -file env_run.xml -id CONTINUE_RUN -val FALSE</command>
+<command>xmlchange -file env_run.xml -id STOP_N -val 11</command>
+<command>xmlchange -file env_run.xml -id REST_OPTION -val ndays</command>
+<command>xmlchange -file env_run.xml -id REST_N -val 6</command>
+<command>xmlchange -file env_run.xml -id HIST_OPTION -val ndays</command>
+<command>xmlchange -file env_run.xml -id HIST_N -val 11</command>
+run started 2016-02-04 14:49:39
+run SUCCESSFUL 2016-02-04 14:52:07
+<command>xmlchange -file env_run.xml -id CONTINUE_RUN -val TRUE</command>
+<command>xmlchange -file env_run.xml -id STOP_N -val 5</command>
+<command>xmlchange -file env_run.xml -id REST_OPTION -val never</command>
+<command>xmlchange -file env_run.xml -id HIST_OPTION -val ndays</command>
+<command>xmlchange -file env_run.xml -id HIST_N -val 11</command>
+run started 2016-02-04 14:52:12
+run SUCCESSFUL 2016-02-04 14:54:34
+test completed 2016-02-04 14:54:38
+clean_build complete 2016-02-10 15:45:09
+
+case.setup 2016-02-10 15:45:44
+ 
+build complete 2016-02-10 15:53:33
+
+test started 2016-02-10 16:11:28
+<command>xmlchange -file env_run.xml -id CONTINUE_RUN -val FALSE</command>
+<command>xmlchange -file env_run.xml -id STOP_N -val 11</command>
+<command>xmlchange -file env_run.xml -id REST_OPTION -val ndays</command>
+<command>xmlchange -file env_run.xml -id REST_N -val 6</command>
+<command>xmlchange -file env_run.xml -id HIST_OPTION -val ndays</command>
+<command>xmlchange -file env_run.xml -id HIST_N -val 11</command>
+run started 2016-02-10 16:11:31
+run SUCCESSFUL 2016-02-10 16:14:29
+<command>xmlchange -file env_run.xml -id CONTINUE_RUN -val TRUE</command>
+<command>xmlchange -file env_run.xml -id STOP_N -val 5</command>
+<command>xmlchange -file env_run.xml -id REST_OPTION -val never</command>
+<command>xmlchange -file env_run.xml -id HIST_OPTION -val ndays</command>
+<command>xmlchange -file env_run.xml -id HIST_N -val 11</command>
+run started 2016-02-10 16:14:37
+run SUCCESSFUL 2016-02-10 16:17:13
+test completed 2016-02-10 16:17:18
+clean_build complete 2016-02-10 17:26:18
+
+case.setup 2016-02-10 17:26:49
+ 
+build complete 2016-02-11 10:55:12
+
+test started 2016-02-11 11:22:42
+<command>xmlchange -file env_run.xml -id CONTINUE_RUN -val FALSE</command>
+<command>xmlchange -file env_run.xml -id STOP_N -val 11</command>
+<command>xmlchange -file env_run.xml -id REST_OPTION -val ndays</command>
+<command>xmlchange -file env_run.xml -id REST_N -val 6</command>
+<command>xmlchange -file env_run.xml -id HIST_OPTION -val ndays</command>
+<command>xmlchange -file env_run.xml -id HIST_N -val 11</command>
+run started 2016-02-11 11:22:46
+run SUCCESSFUL 2016-02-11 11:25:16
+<command>xmlchange -file env_run.xml -id CONTINUE_RUN -val TRUE</command>
+<command>xmlchange -file env_run.xml -id STOP_N -val 5</command>
+<command>xmlchange -file env_run.xml -id REST_OPTION -val never</command>
+<command>xmlchange -file env_run.xml -id HIST_OPTION -val ndays</command>
+<command>xmlchange -file env_run.xml -id HIST_N -val 11</command>
+run started 2016-02-11 11:25:21
+run SUCCESSFUL 2016-02-11 11:27:45
+test completed 2016-02-11 11:27:49
+clean_build complete 2016-02-11 13:51:22
+
+build complete 2016-02-11 14:01:36
+
+test started 2016-02-11 14:52:18
+<command>xmlchange -file env_run.xml -id CONTINUE_RUN -val FALSE</command>
+<command>xmlchange -file env_run.xml -id STOP_N -val 11</command>
+<command>xmlchange -file env_run.xml -id REST_OPTION -val ndays</command>
+<command>xmlchange -file env_run.xml -id REST_N -val 6</command>
+<command>xmlchange -file env_run.xml -id HIST_OPTION -val ndays</command>
+<command>xmlchange -file env_run.xml -id HIST_N -val 11</command>
+run started 2016-02-11 14:52:21
+run SUCCESSFUL 2016-02-11 14:54:55
+<command>xmlchange -file env_run.xml -id CONTINUE_RUN -val TRUE</command>
+<command>xmlchange -file env_run.xml -id STOP_N -val 5</command>
+<command>xmlchange -file env_run.xml -id REST_OPTION -val never</command>
+<command>xmlchange -file env_run.xml -id HIST_OPTION -val ndays</command>
+<command>xmlchange -file env_run.xml -id HIST_N -val 11</command>
+run started 2016-02-11 14:55:01
+run SUCCESSFUL 2016-02-11 14:57:25
+test completed 2016-02-11 14:57:30

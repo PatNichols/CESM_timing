@@ -1,0 +1,112 @@
+================================================================================
+ww3 ChangeLog
+================================================================================
+Originator: jedwards
+Date: 16 Oct 2015
+Model: ww3
+Version: ww3_151016
+One-line summary: bring cime refactor to trunk
+
+================================================================================
+Originator: tcraig
+Date: 25 Sep 2015
+Model: ww3
+Version: ww3_150925
+One-line summary:  update from Qing Li from September 23 2015,
+  fix exact restart + DEBUG
+M       src/source/w3cesmmd.f90
+M       src/source/w3srcemd.f90
+M       src/source/w3initmd.f90
+D       src/source/w3flx1md.f90
+M       src/source/w3iorsmd.f90
+M       src/cpl_mct/wav_comp_mct.F90
+================================================================================
+Originator: tcraig
+Date: 23 Sep 2015
+Model: ww3
+Version: ww3_150923
+One-line summary:  update from Qing Li from September 23 2015, fix coupling mask
+M       src/cpl_mct/wav_comp_mct.F90
+================================================================================
+Originator: tcraig
+Date: 26 Aug 2015
+Model: ww3
+Version: ww3_150826
+One-line summary:  update from Qing Li from August 2015
+M       bld/ww3.buildnml
+M       src/source/w3cesmmd.f90
+M       src/source/w3initmd.f90
+M       src/source/w3wavemd.f90
+M       src/source/w3iorsmd.f90
+M       src/cpl_mct/wav_comp_mct.F90
+================================================================================
+Originator: tcraig
+Date: 18 Aug 2015
+Model: ww3
+Version: ww3_150818
+One-line summary:  update from Qing Li from July 2015
+
+M       bld/ww3.buildlib
+M       bld/ww3.buildnml
+M       src/source/w3odatmd.f90
+M       src/source/w3iogomd.f90
+M       src/source/w3initmd.f90
+M       src/source/w3adatmd.f90
+M       src/source/w3iorsmd.f90
+M       src/source/w3idatmd.f90
+M       src/cpl_mct/wav_comp_mct.F90
+================================================================================
+Originator: mvertens
+Date: 11 Mar 2015
+Model: ww3
+Version: ww3_150311
+One-line summary:  updates needed for introduction of cime
+	
+A       bld/ww3.buildlib
+A       bld/ww3.buildnml
+	
+D       bld/ww3.buildexe.csh
+D       bld/ww3.buildnml.csh
+D       bld/ww3.cpl7.template
+	
+================================================================================
+Originator: tcraig
+Date: 05 Sep 2013
+Model: ww3
+Version: ww3_130905
+One-line summary:  modify coupling interface intents
+	
+M       src/cpl_mct/wav_comp_mct.F90
+================================================================================
+Originator: tcraig
+Date: 14 Mar 2013
+Model: ww3
+Version: ww3_130314
+One-line summary:  remove debug write statements
+
+M       src/source/w3iogomd.f90
+M       src/source/w3wavemd.f90
+================================================================================
+Originator: tcraig
+Date: 13 Mar 2013
+Model: ww3
+Version: ww3_130313
+One-line summary:  update ww3 to cesm1_2_beta02, merge adrean's mods
+
+A       bld/ww3.buildnml.csh
+A       bld/user_nl_ww3
+A       bld/ww3.buildexe.csh
+M       bld/ww3.cpl7.template
+M       src/cpl_share/ww3_cpl_indices.f90
+M       src/source/w3iogomd.f90
+M       src/source/w3wavemd.f90
+M       src/cpl_mct/wav_comp_mct.F90
+================================================================================
+Version: ww3_120308
+================================================================================
+Version: ww3_120227
+================================================================================
+Version: ww3_111230
+================================================================================
+
+

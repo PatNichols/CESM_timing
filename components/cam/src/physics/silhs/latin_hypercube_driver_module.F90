@@ -1,0 +1,3774 @@
+!-------------------------------------------------------------------------------
+! $Id: latin_hypercube_driver_module.F90 7414 2014-12-03 22:46:38Z raut@uwm.edu $
+!===============================================================================
+module latin_hypercube_driver_module
+
+  use clubb_precision, only: &
+    core_rknd           ! Constant
+
+  implicit none
+
+  ! Constant Parameters
+  logical, parameter, private :: &
+    l_diagnostic_iter_check      = .true.,  & ! Check for a problem in iteration
+    l_output_2D_lognormal_dist   = .false., & ! Output a 2D netCDF file of the lognormal variates
+    l_output_2D_uniform_dist     = .false.    ! Output a 2D netCDF file of the uniform distribution
+
+  integer, private :: &
+    prior_iter ! Prior iteration number (for diagnostic purposes)
+!$omp threadprivate( prior_iter )
+
+  integer, parameter, private :: &
+    num_importance_categories = 8 ! Number of importance sampling categories
+                                  ! ( e.g., (cloud,precip,comp1) )
+
+  private ! Default scope
+
+  type lh_clipped_variables_type
+
+    real( kind = core_rknd ) :: &
+      rt,      & ! Total water mixing ratio            [kg/kg]
+      thl,     & ! Liquid potential temperature        [K]
+      rc,      & ! Cloud water mixing ratio            [kg/kg]
+      rv,      & ! Vapor water mixing ratio            [kg/kg]
+      Nc         ! Cloud droplet number concentration  [#/kg]
+
+  end type lh_clipped_variables_type
+
+  public :: lh_clipped_variables_type
+
+#ifdef SILHS
+  public :: latin_hypercube_2D_output, &
+    latin_hypercube_2D_close, stats_accumulate_lh, lh_subcolumn_generator, &
+    copy_X_nl_into_hydromet_all_pts, &
+    generate_strat_uniform_variate, pick_sample_categories, &
+    clip_transform_silhs_output
+
+  private :: stats_accumulate_uniform_lh, cloud_weighted_sampling_driver
+
+  type importance_category_type
+
+    logical :: &
+      l_in_cloud,  &
+      l_in_precip, &
+      l_in_component_1
+
+  end type importance_category_type
+
+  contains
+
+!-------------------------------------------------------------------------------
+  subroutine lh_subcolumn_generator &
+             ( iter, d_variables, num_samples, sequence_length, nz, & ! In
+               pdf_params, delta_zm, rcm, Lscale, & ! In
+               rho_ds_zt, mu1, mu2, sigma1, sigma2, & ! In
+               corr_cholesky_mtx_1, corr_cholesky_mtx_2, & ! In
+               hydromet_pdf_params, & ! In
+               X_nl_all_levs, X_mixt_comp_all_levs, & ! Out
+               lh_sample_point_weights ) ! Out
+
+! Description:
+!   Generate sample points of moisture, temperature, et cetera for the purpose
+!   of computing tendencies with a microphysics or radiation scheme.
+!
+! References:
+!   None
+!-------------------------------------------------------------------------------
+
+    use corr_varnce_module, only: &
+      iiPDF_chi    ! Variables
+
+    use latin_hypercube_arrays, only: &
+      height_time_matrix ! Variables
+
+    use permute_height_time_module, only: &
+      permute_height_time ! Procedure
+
+    use generate_lh_sample_module, only: &
+      generate_lh_sample, & ! Procedure
+      generate_uniform_sample
+
+    use output_2D_samples_module, only: &
+      output_2D_lognormal_dist_file, & ! Procedure(s)
+      output_2D_uniform_dist_file
+
+    use pdf_parameter_module, only: &
+      pdf_parameter  ! Type
+
+    use hydromet_pdf_parameter_module, only: &
+      hydromet_pdf_parameter ! Type
+
+    use constants_clubb, only: &
+      fstderr, & ! Constant
+      zero_threshold
+
+    use parameters_silhs, only: &
+      l_lh_vert_overlap, &  ! Variables
+      l_lh_cloud_weighted_sampling, &
+      l_Lscale_vert_avg
+
+    use error_code, only: &
+      clubb_at_least_debug_level ! Procedure
+
+    use mt95, only: genrand_real ! Constants
+
+    use mt95, only: genrand_init ! Procedure
+
+    use clubb_precision, only: &
+      dp, & ! double precision
+      core_rknd, &
+      stat_rknd
+
+    use fill_holes, only: vertical_avg ! Procedure
+
+    use grid_class, only : gr
+
+    implicit none
+
+    ! External
+    intrinsic :: allocated, mod, maxloc, epsilon, transpose
+
+    ! Parameter Constants
+
+    logical, parameter :: &
+      l_lh_importance_sampling = .true.
+
+    integer, parameter :: &
+      d_uniform_extra = 2   ! Number of variables that are included in the uniform sample but not in
+                            ! the lognormal sample. Currently:
+                            !
+                            ! d_variables+1: Mixture component, for choosing PDF component
+                            ! d_variables+2: Precipitation fraction, for determining precipitation
+
+    ! Input Variables
+    integer, intent(in) :: &
+      iter,            & ! Model iteration number
+      d_variables,     & ! Number of variables to sample
+      num_samples,     & ! Number of samples per variable
+      sequence_length, & ! nt_repeat/num_samples; number of timesteps before sequence repeats.
+      nz                 ! Number of vertical model levels
+
+    type(pdf_parameter), dimension(nz), intent(in) :: &
+      pdf_params ! PDF parameters       [units vary]
+
+    real( kind = core_rknd ), dimension(nz), intent(in) :: &
+      delta_zm, &  ! Difference in moment. altitudes    [m]
+      rcm          ! Liquid water mixing ratio          [kg/kg]
+
+    real( kind = core_rknd ), dimension(nz), intent(in) :: &
+      Lscale       ! Turbulent mixing length            [m]
+
+    real( kind = core_rknd ), dimension(nz), intent(in) :: &
+      rho_ds_zt    ! Dry, static density on thermo. levels    [kg/m^3]
+
+    
+    ! Output Variables
+    real( kind = dp ), intent(out), dimension(nz,num_samples,d_variables) :: &
+      X_nl_all_levs ! Sample that is transformed ultimately to normal-lognormal
+
+    integer, intent(out), dimension(nz,num_samples) :: &
+      X_mixt_comp_all_levs ! Which mixture component we're in
+
+    real( kind = core_rknd ), intent(out), dimension(num_samples) :: &
+      lh_sample_point_weights
+
+    ! More Input Variables!
+    real( kind = dp ), dimension(d_variables,d_variables,nz), intent(in) :: &
+      corr_cholesky_mtx_1, & ! Correlations Cholesky matrix (1st comp.)  [-]
+      corr_cholesky_mtx_2    ! Correlations Cholesky matrix (2nd comp.)  [-]
+
+    real( kind = core_rknd ), dimension(d_variables,nz), intent(in) :: &
+      mu1,    & ! Means of the hydrometeors, 1st comp. (chi, eta, w, <hydrometeors>)  [units vary]
+      mu2,    & ! Means of the hydrometeors, 2nd comp. (chi, eta, w, <hydrometeors>)  [units vary]
+      sigma1, & ! Stdevs of the hydrometeors, 1st comp. (chi, eta, w, <hydrometeors>) [units vary]
+      sigma2    ! Stdevs of the hydrometeors, 2nd comp. (chi, eta, w, <hydrometeors>) [units vary]
+
+    type(hydromet_pdf_parameter), dimension(nz), intent(in) :: &
+      hydromet_pdf_params
+
+    ! Local variables
+    real( kind = core_rknd ), dimension(nz) :: &
+      Lscale_vert_avg ! 3pt vertical average of Lscale  [m]
+
+    real( kind = dp ), dimension(nz,num_samples,(d_variables+d_uniform_extra)) :: &
+      X_u_all_levs ! Sample drawn from uniform distribution
+
+    integer :: p_matrix(num_samples,d_variables+d_uniform_extra)
+
+    real(kind=dp), dimension(nz) :: &
+      X_vert_corr ! Vertical correlation of a variate   [-]
+
+    ! Number of random samples before sequence of repeats (normally=10)
+    integer :: nt_repeat
+
+    integer :: &
+      k_lh_start, & ! Height for preferentially sampling within cloud
+      i_rmd, &      ! Remainder of ( iter-1 / sequence_length )
+      k, sample     ! Loop iterators
+
+    integer :: ivar ! Loop iterator
+
+    integer :: kp1, km1 
+
+    logical :: &
+      l_half_in_cloud                 ! True if half of all samples should land up in cloud
+
+    logical, dimension(nz,num_samples) :: &
+      l_in_precip   ! Whether sample is in precipitation
+
+    logical :: l_error, l_error_in_sub
+
+    ! Precipitation fraction in a component of the PDF, for each sample
+    real( kind = dp ), dimension(num_samples) :: precip_frac_i
+
+    ! ---- Begin Code ----
+
+    if ( l_lh_vert_overlap ) then
+      if ( l_Lscale_vert_avg ) then
+        ! Determine 3pt vertically averaged Lscale
+        do k = 1, nz, 1
+          kp1 = min( k+1, nz )
+          km1 = max( k-1, 1 )
+          Lscale_vert_avg(k) = vertical_avg &
+                               ( (kp1-km1+1), rho_ds_zt(km1:kp1), &
+                                 Lscale(km1:kp1), gr%invrs_dzt(km1:kp1) )
+        end do
+      else
+        Lscale_vert_avg = Lscale 
+      end if
+    else
+      ! If vertical overlap is disabled, this calculation won't be needed
+      Lscale_vert_avg = -999._core_rknd
+    end if
+
+    l_error = .false.
+
+    nt_repeat = num_samples * sequence_length
+
+    if ( .not. allocated( height_time_matrix ) ) then
+      ! If this is first time latin_hypercube_driver is called, then allocate
+      ! the height_time_matrix and set the prior iteration number for debugging
+      ! purposes.
+      allocate( height_time_matrix(nz, nt_repeat, d_variables+d_uniform_extra) )
+
+      prior_iter = iter
+
+      ! Check for a bug where the iteration number isn't incrementing correctly,
+      ! which will lead to improper sampling.
+    else if ( l_diagnostic_iter_check .and. sequence_length > 1 ) then
+
+      if ( prior_iter /= iter-1 ) then
+        write(fstderr,*) "The iteration number in latin_hypercube_driver is"// &
+        " not incrementing properly."
+
+      else
+        prior_iter = iter
+
+      end if
+
+    end if ! First call to the driver
+
+    ! Sanity checks for l_lh_cloud_weighted_sampling
+    if ( l_lh_cloud_weighted_sampling .and. mod( num_samples, 2 ) /= 0 ) then
+      write(fstderr,*) "Cloud weighted sampling requires num_samples to be divisible by 2."
+      stop "Fatal error."
+    end if
+    if ( l_lh_cloud_weighted_sampling .and. sequence_length /= 1 ) then
+      write(fstderr,*) "Cloud weighted sampling requires sequence length be equal to 1."
+      stop "Fatal error."
+    end if
+
+    ! Latin hypercube sample generation
+    ! Generate height_time_matrix, an nz x nt_repeat x d_variables array of random integers
+    i_rmd = mod( iter-1, sequence_length )
+
+    if ( i_rmd == 0 ) then
+      call permute_height_time( nz, nt_repeat, d_variables+d_uniform_extra, & ! intent(in)
+                                height_time_matrix )                          ! intent(out)
+    end if
+    ! End Latin hypercube sample generation
+
+    !--------------------------------------------------------------
+    ! Latin hypercube sampling
+    !--------------------------------------------------------------
+
+
+    k_lh_start    = maxloc( rcm, 1 )
+
+    ! If there's no cloud k_lh_start appears to end up being 1. Check if
+    ! k_lh_start is 1 or nz and set it to the middle of the domain in that
+    ! case.
+    if ( k_lh_start == nz .or. k_lh_start == 1 ) then
+      k_lh_start = nz / 2
+    end if
+
+    if ( l_lh_vert_overlap ) then
+
+      ! Choose which rows of LH sample to feed into closure at the k_lh_start level
+      p_matrix(1:num_samples,1:(d_variables+d_uniform_extra)) = &
+        height_time_matrix(k_lh_start, &
+        (num_samples*i_rmd+1):(num_samples*i_rmd+num_samples), &
+        1:(d_variables+d_uniform_extra))
+
+      ! Generate the uniform distribution using the Mersenne twister at the k_lh_start level
+      call generate_uniform_sample( num_samples, nt_repeat, d_variables+d_uniform_extra, & ! In
+                                    p_matrix, & ! In
+                                    X_u_all_levs(k_lh_start,:,:) ) ! Out
+
+      if ( l_lh_cloud_weighted_sampling .and. .not. l_lh_importance_sampling ) then
+
+          call cloud_weighted_sampling_driver &
+               ( num_samples, p_matrix(:,iiPDF_chi), p_matrix(:,d_variables+1), &
+                 pdf_params(k_lh_start)%cloud_frac_1, pdf_params(k_lh_start)%cloud_frac_2, & ! In
+                 pdf_params(k_lh_start)%mixt_frac, & ! In
+                 X_u_all_levs(k_lh_start,:,iiPDF_chi), & ! In/Out
+                 X_u_all_levs(k_lh_start,:,d_variables+1), & ! In/Out
+                 lh_sample_point_weights, l_half_in_cloud ) ! Out
+
+      else if ( l_lh_cloud_weighted_sampling .and. l_lh_importance_sampling ) then
+
+          call importance_sampling_driver &
+               ( num_samples, pdf_params(k_lh_start), hydromet_pdf_params(k_lh_start), & ! In
+                 X_u_all_levs(k_lh_start,:,iiPDF_chi), & ! In/Out
+                 X_u_all_levs(k_lh_start,:,d_variables+1), & ! In/Out
+                 X_u_all_levs(k_lh_start,:,d_variables+2), & ! In/Out
+                 lh_sample_point_weights ) ! Out
+
+          ! In general, this code no longer guarantees that half of all sample points will reside
+          ! in cloud.
+          l_half_in_cloud = .false.
+
+      else
+
+          ! If we are not doing cloud weighted sampling, we can't expect half of the sample
+          ! points to be in cloud
+          l_half_in_cloud = .false.
+          ! All sample points will have the same weight
+          lh_sample_point_weights(1:num_samples)  = 1.0_core_rknd
+
+      end if ! l_lh_cloud_weighted_sampling
+
+      ! Use a fixed number for the vertical correlation.
+!     X_vert_corr(1:nz) = 0.95_dp
+
+      ! Compute vertical correlation using a formula based on Lscale, the
+      ! the difference in height levels, and an empirical constant
+      X_vert_corr(1:nz) = &
+        real(compute_vert_corr( nz, delta_zm, Lscale_vert_avg ), kind = dp)
+
+      ! Assertion check for the vertical correlation
+      if ( clubb_at_least_debug_level( 2 ) ) then
+        if ( any( X_vert_corr > 1.0_dp ) .or. any( X_vert_corr < 0.0_dp ) ) then
+          write(fstderr,*) "The vertical correlation in latin_hypercube_driver"// &
+            "is not in the correct range"
+          do k = 1, nz
+            write(fstderr,*) "k = ", k,  "Vert. correlation = ", X_vert_corr(k)
+          end do
+          l_error = .true.
+        end if ! Some correlation isn't between [0,1]
+      end if ! clubb_at_least_debug_level 1
+
+      do sample = 1, num_samples
+        ! Correlate chi vertically
+        call compute_arb_overlap &
+             ( nz, k_lh_start, &  ! In
+               X_vert_corr, & ! In
+               X_u_all_levs(:,sample,iiPDF_chi) ) ! Inout
+        ! Correlate the d+1 variate vertically (used to compute the mixture
+        ! component later)
+        call compute_arb_overlap &
+             ( nz, k_lh_start, &  ! In
+               X_vert_corr, & ! In
+               X_u_all_levs(:,sample,d_variables+1) ) ! Inout
+
+        ! Correlate the d+2 variate vertically (used to determine precipitation
+        ! later)
+        call compute_arb_overlap &
+             ( nz, k_lh_start, &  ! In
+               X_vert_corr, & ! In
+               X_u_all_levs(:,sample,d_variables+2) ) ! Inout
+
+        ! Use these lines to make all variates vertically correlated, using the
+        ! same correlation we used above for chi and the d+1 variate
+        do ivar = 1, d_variables
+          if ( ivar /= iiPDF_chi ) then
+            call compute_arb_overlap &
+                 ( nz, k_lh_start, &  ! In
+                   X_vert_corr, & ! In
+                   X_u_all_levs(:,sample,ivar) ) ! Inout
+          end if
+        end do ! 1..d_variables
+      end do ! 1..num_samples
+      ! %% Debug %%
+      ! Testing what happens when we clip uniformally distributed variates to
+      ! avoid extreme values.
+!     where ( X_u_all_levs (:,:,2:d_variables) > 0.99_core_rknd ) &
+!       X_u_all_levs(:,:,2:d_variables) = 0.99_core_rknd
+      ! %% End Debug %%
+
+    else ! Random overlap
+
+      do k = 1, nz
+        ! Choose which rows of LH sample to feed into closure.
+        p_matrix(1:num_samples,1:(d_variables+d_uniform_extra)) = &
+          height_time_matrix(k, num_samples*i_rmd+1:num_samples*i_rmd+num_samples, &
+                             1:d_variables+d_uniform_extra)
+
+        ! Generate the uniform distribution using the Mersenne twister
+        !  X_u has one extra dimension for the mixture component.
+        call generate_uniform_sample( num_samples, nt_repeat, d_variables+d_uniform_extra, &
+                                      p_matrix, & ! In
+                                      X_u_all_levs(k,:,:) ) ! Out
+      end do ! 1..nz
+
+    end if ! l_lh_vert_overlap
+
+    do k = 1, nz
+      ! Determine mixture component for all levels
+      where ( in_mixt_comp_1( X_u_all_levs(k,:,d_variables+1), &
+           real(pdf_params(k)%mixt_frac, kind = dp) ) )
+        X_mixt_comp_all_levs(k,:) = 1
+      else where
+        X_mixt_comp_all_levs(k,:) = 2
+      end where
+
+      ! Determine precipitation fraction
+      where ( X_mixt_comp_all_levs(k,:) == 1 )
+        precip_frac_i(:) = real( hydromet_pdf_params(k)%precip_frac_1, kind=dp )
+      else where
+        precip_frac_i(:) = real( hydromet_pdf_params(k)%precip_frac_2, kind=dp )
+      end where
+
+      ! Determine precipitation for all levels
+      where ( in_precipitation( X_u_all_levs(k,:,d_variables+2), &
+                  precip_frac_i(:) ) )
+        l_in_precip(k,:) = .true.
+      else where
+        l_in_precip(k,:) = .false.
+      end where
+
+    end do ! k = 1 .. nz
+
+    call stats_accumulate_uniform_lh( nz, num_samples, l_in_precip, X_mixt_comp_all_levs, &
+                                      lh_sample_point_weights, k_lh_start )
+
+    ! Sample loop
+    do k = 1, nz
+      ! Generate LH sample, represented by X_u and X_nl, for level k
+      do sample = 1, num_samples, 1
+        call generate_lh_sample &
+             ( d_variables, d_uniform_extra, & ! In
+               mu1(:,k), mu2(:,k), sigma1(:,k), sigma2(:,k), & ! In
+               corr_cholesky_mtx_1(:,:,k), & ! In
+               corr_cholesky_mtx_2(:,:,k), & ! In
+               X_u_all_levs(k,sample,:), X_mixt_comp_all_levs(k,sample), & ! In
+               l_in_precip(k,sample), & ! In
+               X_nl_all_levs(k,sample,:) ) ! Out
+      end do ! sample = 1, num_samples, 1
+    end do ! k = 1, nz
+
+    if ( l_output_2D_lognormal_dist ) then
+      ! Eric Raut removed lh_rt and lh_thl from call to output_2D_lognormal_dist_file
+      ! because they are no longer generated in lh_subcolumn_generator.
+      call output_2D_lognormal_dist_file( nz, num_samples, d_variables, &
+                                          real(X_nl_all_levs, kind = stat_rknd) )
+    end if
+    if ( l_output_2D_uniform_dist ) then
+      call output_2D_uniform_dist_file( nz, num_samples, d_variables+2, &
+                                        real(X_u_all_levs, kind = genrand_real), &
+                                        X_mixt_comp_all_levs, p_matrix, &
+                                        lh_sample_point_weights )
+    end if
+
+    ! Various nefarious assertion checks
+    if ( clubb_at_least_debug_level( 2 ) ) then
+
+      ! Simple assertion check to ensure uniform variates are in the appropriate
+      ! range
+      if ( any( X_u_all_levs < 0._dp .or. X_u_all_levs > 1._dp ) ) then
+        write(fstderr,*) "A uniform variate was not in the correct range."
+        l_error = .true.
+      end if
+
+      ! Assertion check for whether half of sample points are cloudy.
+      if ( l_half_in_cloud ) then
+
+        ! Check for half cloudy points in uniform space
+        call assert_half_cloudy_uniform &
+             ( num_samples, pdf_params(k_lh_start)%cloud_frac_1, &
+               pdf_params(k_lh_start)%cloud_frac_2, X_mixt_comp_all_levs(k_lh_start,:), &
+               X_u_all_levs(k_lh_start,:,iiPDF_chi), l_error_in_sub )
+
+        l_error = l_error .or. l_error_in_sub
+
+        call assert_unity_sample_weights( num_samples, lh_sample_point_weights, &
+                                          l_error_in_sub )
+        l_error = l_error .or. l_error_in_sub
+
+      end if ! l_half_in_cloud
+
+      do k=2, nz
+
+        call assert_consistent_cloud_frac( pdf_params(k), l_error_in_sub )
+        l_error = l_error .or. l_error_in_sub
+
+        ! Check for correct transformation in normal space
+        call assert_correct_cloud_normal( num_samples, X_u_all_levs(k,:,iiPDF_chi), & ! In
+                                          X_nl_all_levs(k,:,iiPDF_chi), & ! In
+                                          X_mixt_comp_all_levs(k,:), & ! In
+                                          pdf_params(k)%cloud_frac_1, & ! In
+                                          pdf_params(k)%cloud_frac_2, & ! In
+                                          l_error_in_sub ) ! Out
+        l_error = l_error .or. l_error_in_sub
+
+      end do ! k=2, nz
+
+    end if ! clubb_at_least_debug_level( 2 )
+
+    ! Stop the run if an error occurred
+    if ( l_error ) then
+      stop "Fatal error in lh_subcolumn_generator"
+    end if
+
+    return
+  end subroutine lh_subcolumn_generator
+!-------------------------------------------------------------------------------
+
+!-----------------------------------------------------------------------
+  subroutine clip_transform_silhs_output &
+             ( nz, num_samples, d_variables, X_mixt_comp_all_levs, X_nl_all_levs, pdf_params, &
+               lh_clipped_vars )
+
+  ! Description:
+  !   Derives from the SILHS sampling structure X_nl_all_levs the variables
+  !   rt, thl, rc, rv, and Nc, for all sample points and height levels.
+
+  ! References:
+  !   ticket:751
+  !-----------------------------------------------------------------------
+
+    ! Included Modules
+    use clubb_precision, only: &
+      dp, & ! Constant(s)
+      core_rknd
+
+    use constants_clubb, only: &
+      zero, &   ! Constant(s)
+      rt_tol
+
+    use pdf_parameter_module, only: &
+      pdf_parameter ! Type
+
+    use corr_varnce_module, only: &
+      iiPDF_chi, &  ! Variable(s)
+      iiPDF_eta, &
+      iiPDF_Ncn
+
+    use generate_lh_sample_module, only: &
+      chi_eta_2_rtthl ! Awesome procedure
+
+    implicit none
+
+    ! Input Variables
+    integer, intent(in) :: &
+      nz,          &         ! Number of vertical levels
+      num_samples, &         ! Number of SILHS sample points
+      d_variables            ! Number of variates in X_nl_one_lev
+
+    integer, dimension(nz,num_samples), intent(in) :: &
+      X_mixt_comp_all_levs   ! Which component this sample is in (1 or 2)
+
+    real( kind = dp ), dimension(nz,num_samples,d_variables) :: &
+      X_nl_all_levs          ! A SILHS sample
+
+    type(pdf_parameter), dimension(nz), intent(in) :: &
+      pdf_params             ! **The** PDF parameters!
+
+    ! Output Variables
+    type(lh_clipped_variables_type), dimension(nz,num_samples), intent(out) :: &
+      lh_clipped_vars        ! SILHS clipped and transformed variables
+
+    ! Local Variables
+    real( kind = core_rknd ), dimension(nz,num_samples) :: &
+      lh_rt,   &             ! Total water mixing ratio            [kg/kg]
+      lh_thl,  &             ! Liquid potential temperature        [K]
+      lh_rc,   &             ! Cloud water mixing ratio            [kg/kg]
+      lh_rv,   &             ! Vapor water mixing ratio            [kg/kg]
+      lh_Nc                  ! Cloud droplet number concentration  [#/kg]
+
+    real( kind = core_rknd ) :: &
+      rt_1,    &
+      rt_2,    &
+      thl_1,   &
+      thl_2,   &
+      crt_1,   &
+      crt_2,   &
+      cthl_1,  &
+      cthl_2,  &
+      chi_1,   &
+      chi_2,   &
+      lh_chi,  &
+      lh_eta
+
+    integer :: &
+      isample, k
+
+    logical :: &
+      l_rt_clipped, &
+      l_rv_clipped
+
+  !-----------------------------------------------------------------------
+
+    l_rt_clipped = .false.
+    l_rv_clipped = .false.
+
+    !----- Begin Code -----
+
+    ! Loop over all thermodynamic levels above the model lower boundary.
+    do k=2, nz
+
+      ! Enter the PDF parameters!!
+      rt_1   = pdf_params(k)%rt_1
+      rt_2   = pdf_params(k)%rt_2
+      thl_1  = pdf_params(k)%thl_1
+      thl_2  = pdf_params(k)%thl_2
+      crt_1  = pdf_params(k)%crt_1
+      crt_2  = pdf_params(k)%crt_2
+      cthl_1 = pdf_params(k)%cthl_1
+      cthl_2 = pdf_params(k)%cthl_2
+      chi_1  = pdf_params(k)%chi_1
+      chi_2  = pdf_params(k)%chi_2
+
+      do isample=1, num_samples
+
+        lh_chi = real( X_nl_all_levs(k,isample,iiPDF_chi), kind=core_rknd )
+        lh_eta = real( X_nl_all_levs(k,isample,iiPDF_eta), kind=core_rknd )
+
+        ! Compute lh_rt and lh_thl
+        call chi_eta_2_rtthl( rt_1, thl_1, rt_2, thl_2, &                        ! Intent(in)
+                              crt_1, cthl_1, crt_2, cthl_2, &                    ! Intent(in)
+                              chi_1, chi_2, &                                    ! Intent(in)
+                              lh_chi, lh_eta, X_mixt_comp_all_levs(k,isample), & ! Intent(in)
+                              lh_rt(k,isample), lh_thl(k,isample) )              ! Intent(out)
+
+        ! If necessary, clip rt
+        if ( lh_rt(k,isample) < rt_tol ) then
+          lh_rt(k,isample) = rt_tol
+          l_rt_clipped = .true.
+        end if
+
+        ! Compute lh_rc
+        lh_rc(k,isample) = chi_to_rc( real( X_nl_all_levs(k,isample,iiPDF_chi), kind=core_rknd ) )
+        ! Clip lh_rc.
+        if ( lh_rc(k,isample) > lh_rt(k,isample) - rt_tol ) then
+          lh_rc(k,isample) = lh_rt(k,isample) - rt_tol
+        end if
+
+        ! Compute lh_rv
+        lh_rv(k,isample) = lh_rt(k,isample) - lh_rc(k,isample)
+
+        ! Compute lh_Nc
+        ! KTC: CAM requires that Nc exist even if CLW = 0. Thus, Ncn_to_Nc causes many problems, 
+        ! KTC: and I am removing it. Future version of this code use a flag to turn this
+        ! KTC: on and off, but for cam, we only need it off.
+        lh_Nc(k,isample) = real( X_nl_all_levs(k,isample,iiPDF_Ncn), kind=core_rknd )
+
+      end do ! isample=1, num_samples
+
+    end do ! k=2, nz
+
+    ! These parameters are not computed at the model lower level.
+    lh_rt(1,:) = zero
+    lh_thl(1,:) = zero
+    lh_rc(1,:) = zero
+    lh_rv(1,:) = zero
+    lh_Nc(1,:) = zero
+
+    ! Pack into output structure
+    lh_clipped_vars(:,:)%rt  = lh_rt(:,:)
+    lh_clipped_vars(:,:)%thl = lh_thl(:,:)
+    lh_clipped_vars(:,:)%rc  = lh_rc(:,:)
+    lh_clipped_vars(:,:)%rv  = lh_rv(:,:)
+    lh_clipped_vars(:,:)%Nc  = lh_Nc(:,:)
+
+    return
+  end subroutine clip_transform_silhs_output
+
+
+!-----------------------------------------------------------------------
+
+!-----------------------------------------------------------------------
+  subroutine importance_sampling_driver &
+             ( num_samples, pdf_params, hydromet_pdf_params,        &
+               X_u_chi_one_lev, X_u_dp1_one_lev, X_u_dp2_one_lev,   &
+               lh_sample_point_weights )
+
+  ! Description:
+  !   Applies importance sampling to a single vertical level !
+
+  ! References:
+  !   clubb:ticket:736 !
+  !-----------------------------------------------------------------------
+
+    ! Included Modules
+    use clubb_precision, only: &
+      core_rknd, &      ! Constant(s)
+      dp
+
+    use pdf_parameter_module, only: &
+      pdf_parameter     ! Type
+
+    use hydromet_pdf_parameter_module, only: &
+      hydromet_pdf_parameter ! Type
+
+    use error_code, only: &
+      clubb_at_least_debug_level  ! Procedure
+
+    implicit none
+
+    ! Local Parameters
+    logical, parameter :: &
+      l_use_prescribed_probs = .false.   ! Use prescribed probability importance sampling
+
+    ! Input Variables
+    integer, intent(in) :: &
+      num_samples       ! Number of SILHS sample points
+
+    type(pdf_parameter), intent(in) :: &
+      pdf_params
+
+    type(hydromet_pdf_parameter), intent(in) :: &
+      hydromet_pdf_params
+
+    ! Input/Output Variables
+    real( kind = dp ), dimension(num_samples), intent(inout) :: &
+      X_u_chi_one_lev,  & ! These uniform variates are scaled by the importance
+      X_u_dp1_one_lev,  & ! sampling process.
+      X_u_dp2_one_lev
+
+    ! Output Variables
+    real( kind = core_rknd ), dimension(num_samples), intent(out) :: &
+      lh_sample_point_weights
+
+    ! Local Variables
+    type(importance_category_type), dimension(num_importance_categories) :: &
+      importance_categories ! A vector containing the different importance categories
+
+    real( kind = core_rknd ), dimension(num_importance_categories) :: &
+      category_real_probs,       & ! The real PDF probabilities for each category
+      category_prescribed_probs, & ! Prescribed probability for each category
+      category_sample_weights      ! Sample weight for each category
+
+    real( kind = core_rknd ), dimension(num_samples) :: &
+      rand_vect
+
+    integer, dimension(num_samples) :: &
+      int_sample_category  ! An integer for each sample corresponding to the
+                           ! category picked for the sample
+
+    integer :: sample
+    logical :: l_error
+
+  !-----------------------------------------------------------------------
+
+    !----- Begin Code -----
+    l_error = .false.
+
+    importance_categories = define_importance_categories( )
+
+    category_real_probs = compute_category_real_probs &
+                          ( importance_categories, pdf_params, hydromet_pdf_params )
+
+    if ( l_use_prescribed_probs ) then
+
+      ! Prescribe the probabilities
+      category_prescribed_probs = prescribe_importance_probs &
+                                  ( importance_categories, category_real_probs )
+
+    else
+
+      ! Importance sampling strategy that places half of all sample points in cloud!
+      category_prescribed_probs = cloud_importance_sampling &
+                                  ( importance_categories, category_real_probs, &
+                                    pdf_params )
+
+    end if ! l_use_prescribed_probs
+
+    ! Compute weight of each sample category
+    category_sample_weights = compute_category_sample_weights &
+                              ( category_real_probs, category_prescribed_probs )
+
+    ! Generate a stratified sample to be used to pick categories for the samples
+    rand_vect = generate_strat_uniform_variate( num_samples )
+
+    ! Pick the sample points!
+    int_sample_category = pick_sample_categories( num_samples, category_prescribed_probs, &
+                                                  rand_vect )
+
+    ! Scale and translate points to reside in their respective categories
+    do sample=1, num_samples
+
+      ! Scale and translate point to reside in its respective cateogry
+      call scale_sample_to_category &
+           ( importance_categories(int_sample_category(sample)), & ! In
+             pdf_params, hydromet_pdf_params, & ! In
+             X_u_chi_one_lev(sample), X_u_dp1_one_lev(sample), X_u_dp2_one_lev(sample) ) ! In/Out
+
+      ! Pick a weight for the sample point
+      lh_sample_point_weights(sample) = &
+        category_sample_weights(int_sample_category(sample))
+
+    end do ! sample=1, num_samples
+
+    if ( clubb_at_least_debug_level( 2 ) ) then
+
+      call importance_sampling_assertions &
+           ( num_samples, importance_categories, category_real_probs, & ! In
+             category_prescribed_probs, category_sample_weights, X_u_chi_one_lev, & ! In
+             X_u_dp1_one_lev, X_u_dp2_one_lev, int_sample_category, & ! In
+             pdf_params, hydromet_pdf_params, & ! In
+             l_error ) ! Out
+
+      if ( l_error ) then
+        stop "Fatal error in importance_sampling_driver"
+      end if ! l_error
+
+    end if
+
+    return
+  end subroutine importance_sampling_driver
+!-----------------------------------------------------------------------
+
+!-----------------------------------------------------------------------
+  function define_importance_categories( ) &
+
+  result( importance_categories )
+
+  ! Description:
+  !   Creates a vector of size num_importance_categories that defines the eight
+  !   importance sampling categories.
+
+  ! References:
+  !   None
+  !-----------------------------------------------------------------------
+
+    implicit none
+
+    ! Output Variable
+    type(importance_category_type), dimension(num_importance_categories) :: &
+      importance_categories ! A vector containing the different importance categories
+
+  !-----------------------------------------------------------------------
+
+    !----- Begin Code -----
+
+    importance_categories(1)%l_in_cloud       = .true.
+    importance_categories(1)%l_in_precip      = .true.
+    importance_categories(1)%l_in_component_1 = .true.
+
+    importance_categories(2)%l_in_cloud       = .true.
+    importance_categories(2)%l_in_precip      = .true.
+    importance_categories(2)%l_in_component_1 = .false.
+
+    importance_categories(3)%l_in_cloud       = .false.
+    importance_categories(3)%l_in_precip      = .true.
+    importance_categories(3)%l_in_component_1 = .true.
+
+    importance_categories(4)%l_in_cloud       = .false.
+    importance_categories(4)%l_in_precip      = .true.
+    importance_categories(4)%l_in_component_1 = .false.
+
+    importance_categories(5)%l_in_cloud       = .true.
+    importance_categories(5)%l_in_precip      = .false.
+    importance_categories(5)%l_in_component_1 = .true.
+
+    importance_categories(6)%l_in_cloud       = .true.
+    importance_categories(6)%l_in_precip      = .false.
+    importance_categories(6)%l_in_component_1 = .false.
+
+    importance_categories(7)%l_in_cloud       = .false.
+    importance_categories(7)%l_in_precip      = .false.
+    importance_categories(7)%l_in_component_1 = .true.
+
+    importance_categories(8)%l_in_cloud       = .false.
+    importance_categories(8)%l_in_precip      = .false.
+    importance_categories(8)%l_in_component_1 = .false.
+
+    return
+  end function define_importance_categories
+!-----------------------------------------------------------------------
+
+!-----------------------------------------------------------------------
+  function compute_category_real_probs( importance_categories, pdf_params, &
+                                        hydromet_pdf_params ) &
+
+  result( category_real_probs )
+
+  ! Description:
+  !   Computes the real PDF probability associated with each importance sampling
+  !   category.
+  !
+  !   For example, if a category is in cloud, out of precipitation, and in mixture
+  !   component two, then without importance sampling, the probability that a
+  !   point will appear in that category is:
+  !   P(cloud,noprecip,comp2) = cloud_frac_2 * (1-precip_frac_2) * (1-mixt_frac)
+
+  ! References:
+  !   None
+  !-----------------------------------------------------------------------
+
+    ! Included Modules
+    use clubb_precision, only: &
+      core_rknd
+
+    use constants_clubb, only: &
+      one    ! Constant
+
+    use pdf_parameter_module, only: &
+      pdf_parameter           ! Type
+
+    use hydromet_pdf_parameter_module, only: &
+      hydromet_pdf_parameter  ! Type
+
+    implicit none
+
+    ! Input Variables
+    type(importance_category_type), dimension(num_importance_categories), intent(in) :: &
+      importance_categories  ! A list of importance categories
+
+    type(pdf_parameter), intent(in) :: &
+      pdf_params             ! The PDF parameters!
+
+    type(hydromet_pdf_parameter), intent(in) :: &
+      hydromet_pdf_params    ! The hydrometeor PDF parameters!
+
+    ! Output Variable
+    real( kind = core_rknd ), dimension(num_importance_categories) :: &
+      category_real_probs ! The real PDF probabilities for each category
+
+    ! Local Variables
+    real( kind = core_rknd ) :: &
+      cloud_frac_i,        &
+      precip_frac_i,       &
+      cloud_factor,        &
+      precip_factor,       &
+      component_factor
+
+    integer :: icategory
+
+  !-----------------------------------------------------------------------
+
+    !----- Begin Code -----
+
+    do icategory = 1, num_importance_categories
+
+      ! Determine component of category
+      if ( importance_categories(icategory)%l_in_component_1 ) then
+        cloud_frac_i     = pdf_params%cloud_frac_1
+        precip_frac_i    = hydromet_pdf_params%precip_frac_1
+        component_factor = pdf_params%mixt_frac
+      else
+        cloud_frac_i     = pdf_params%cloud_frac_2
+        precip_frac_i    = hydromet_pdf_params%precip_frac_2
+        component_factor = (one-pdf_params%mixt_frac)
+      end if
+
+      ! Determine cloud factor
+      if ( importance_categories(icategory)%l_in_cloud ) then
+        cloud_factor = cloud_frac_i
+      else
+        cloud_factor = (one-cloud_frac_i)
+      end if
+
+      ! Determine precip factor
+      if ( importance_categories(icategory)%l_in_precip ) then
+        precip_factor = precip_frac_i
+      else
+        precip_factor = (one-precip_frac_i)
+      end if
+
+      ! Compute the category probability
+      category_real_probs(icategory) = component_factor * cloud_factor * precip_factor
+
+    end do ! icategory = 1, num_importance_categories
+
+    return
+  end function compute_category_real_probs
+!-----------------------------------------------------------------------
+
+!-----------------------------------------------------------------------
+  function compute_category_sample_weights( category_real_probs, category_prescribed_probs ) &
+
+  result( category_sample_weights )
+
+  ! Description:
+  !   Compute the sample point weights for a sample point in each category based
+  !   on the PDF probability and the modified probability from importance
+  !   sampling
+
+  ! References:
+  !   None
+  !-----------------------------------------------------------------------
+
+    use clubb_precision, only: &
+      core_rknd     ! Constant
+
+    use constants_clubb, only: &
+      zero, &       ! Constant
+      unused_var
+
+    implicit none
+
+    ! Input Variables
+
+    real( kind = core_rknd ), dimension(num_importance_categories), intent(in) :: &
+      category_real_probs,  &   ! The actual PDF probability of each category
+      category_prescribed_probs ! The modified probability of each category due to
+                                ! importance sampling
+
+    ! Output Variable
+    real( kind = core_rknd ), dimension(num_importance_categories) :: &
+      category_sample_weights   ! Sample weight for each category
+
+    ! Local Variable
+    integer :: icategory
+
+  !-----------------------------------------------------------------------
+
+    !----- Begin Code -----
+
+    do icategory=1, num_importance_categories
+
+      if ( category_prescribed_probs(icategory) == zero ) then
+        ! If a category has no probability of being sampled, then its weight is irrevelant.
+        category_sample_weights(icategory) = unused_var
+      else
+        category_sample_weights(icategory) = &
+          category_real_probs(icategory) / category_prescribed_probs(icategory)
+      end if
+
+    end do
+
+    return
+  end function compute_category_sample_weights
+!-----------------------------------------------------------------------
+
+!-----------------------------------------------------------------------
+  function pick_sample_categories( num_samples, category_prescribed_probs, rand_vect ) &
+
+  result( int_sample_category )
+
+  ! Description:
+  !   Picks a category for each sample point, based on the given probabilities,
+  !   such that the distribution of categories of the sample points
+  !   approximates the probabilities that are given.
+
+  ! References:
+  !   None
+  !-----------------------------------------------------------------------
+
+    ! Included Modules
+    use clubb_precision, only: &
+      dp,           &    ! Konstant(s)
+      core_rknd
+
+    use constants_clubb, only: &
+      fstderr, &
+      one, &
+      zero
+
+    implicit none
+
+    ! Input Variables
+    integer, intent(in) :: &
+      num_samples          ! Number of sample points to be picked
+
+    real( kind = core_rknd ), dimension(num_importance_categories), intent(in) :: &
+      category_prescribed_probs ! Prescribed probability for each category
+
+    real( kind = core_rknd ), dimension(num_samples), intent(in) :: &
+      rand_vect            ! A sample of num_samples values from the uniform distribution
+                           ! in the range (0,1). This will be used to pick the
+                           ! categories.
+
+    ! Output Variable
+    integer, dimension(num_samples) :: &
+      int_sample_category  ! An integer for each sample corresponding to the
+                           ! category picked for the sample
+
+    ! Local Variables
+    integer :: sample,category      ! Looping variable(s)
+
+    real( kind = core_rknd ), dimension(num_importance_categories) :: &
+      category_cumulative_probs
+
+  !-----------------------------------------------------------------------
+
+    !----- Begin Code -----
+
+    !--------------------------------------------------------------------------
+    ! In order to facilitate picking categories for the sample points, a new
+    ! array, category_cumulative_probs, is created.
+    !
+    ! Each element of category_cumulative_probs is simply the sum of the
+    ! probabilities of all the previous categories. For example,
+    !
+    ! category_cumulative_probs(1) = 0
+    ! category_cumulative_probs(2) = category_prescribed_probs(1)
+    ! category_cumulative_probs(3) = category_prescribed_probs(1) + category_prescribed_probs(2)
+    ! ...
+    ! category_cumulative_probs(num_importance_categories) =
+    !             category_prescribed_probs(1) + category_prescribed_probs(2) + ... +
+    !             category_prescribed_probs(num_importance_categories-1)
+    !--------------------------------------------------------------------------
+    category_cumulative_probs(1) = zero
+    do category=2, num_importance_categories
+      category_cumulative_probs(category) = category_cumulative_probs(category-1) + &
+                                            category_prescribed_probs(category-1)
+    end do
+
+    !--------------------------------------------------------------------------
+    ! Pick categories based on the values of rand_vect.
+    !--------------------------------------------------------------------------
+    do sample=1, num_samples
+      ! Initialize int_sample_category(sample) for error checking purposes.
+      int_sample_category(sample) = 0
+      do category=1, num_importance_categories
+
+        if ( category < num_importance_categories ) then
+
+          if ( rand_vect(sample) >= category_cumulative_probs(category) .and. &
+               rand_vect(sample) <  category_cumulative_probs(category+1) ) then
+
+            int_sample_category(sample) = category
+            exit   ! Break out of the loop over categories, since we have found the category
+
+          end if
+
+        else if ( category == num_importance_categories ) then
+
+          ! If the random number is greater than category_cumulative_probs(num_imp_categories-1)
+          ! and less than 1, then it belongs in the last category
+          if ( rand_vect(sample) >= category_cumulative_probs(category) .and. &
+               rand_vect(sample) < one ) then
+            int_sample_category(sample) = category
+          end if
+
+        end if ! category < num_importance_categories
+
+      end do ! category=1, num_importance_categories-1
+
+      ! We should have picked a category by now.
+      if ( int_sample_category(sample) == 0 ) then
+        write(fstderr,*) "Invalid rand_vect number in pick_sample_categories"
+        write(fstderr,*) "rand_vect(sample) = ", rand_vect(sample)
+        stop "Fatal error"
+      end if
+
+    end do ! sample=1, num_samples
+
+    return
+  end function pick_sample_categories
+!-----------------------------------------------------------------------
+
+!-----------------------------------------------------------------------
+  subroutine scale_sample_to_category( category, pdf_params, hydromet_pdf_params, &
+                                       X_u_chi, X_u_dp1, X_u_dp2 )
+
+  ! Description:
+  !   Scale and transpose a sample point to reside in the specified category
+
+  ! References:
+  !   None
+  !-----------------------------------------------------------------------
+
+    ! Included Modules
+    use clubb_precision, only: &
+      dp,           &    ! Konstant(s)
+      core_rknd
+
+    use constants_clubb, only: &
+      one_dp             ! Constant
+
+    use pdf_parameter_module, only: &
+      pdf_parameter
+
+    use hydromet_pdf_parameter_module, only: &
+      hydromet_pdf_parameter
+
+    implicit none
+
+    ! Input Variables
+    type(importance_category_type), intent(in) :: &
+      category             ! Scale the sample point to reside in this category
+
+    type(pdf_parameter), intent(in) :: &
+      pdf_params
+
+    type(hydromet_pdf_parameter), intent(in) :: &
+      hydromet_pdf_params
+
+    ! Input/Output Variable
+    ! These uniform samples, upon input, are uniformly distributed in the
+    ! range (0,1).
+    real( kind = dp ), intent(inout) :: &
+      X_u_chi, & ! Uniform samples of extend cloud water mixing ratio
+      X_u_dp1, & ! Uniform samples of the d+1 variate
+      X_u_dp2    ! Uniform samples of the d+2 variate
+
+    ! Local Variables
+    real( kind = dp ) :: &
+      cloud_frac_i, & 
+      precip_frac_i, &
+      mixt_frac
+
+  !-----------------------------------------------------------------------
+
+    !----- Begin Code -----
+
+    mixt_frac = real( pdf_params%mixt_frac, kind=dp )
+
+    !--------------------------------------------------------
+    ! Scale dp1 variate to be in component 1 or 2
+    !--------------------------------------------------------
+    if ( category%l_in_component_1 ) then
+
+      ! Samples in component 1 have a dp1 variate that satisfies
+      ! 0 < X_u_dp1 < mixt_frac.
+      ! Scale X_u_dp1 to lie in (0,mixt_frac)
+      X_u_dp1 = X_u_dp1 * mixt_frac
+
+      cloud_frac_i  = real( pdf_params%cloud_frac_1, kind=dp )
+      precip_frac_i = real( hydromet_pdf_params%precip_frac_1, kind=dp )
+
+    else  ! in component 2
+
+      ! Scale and translate X_u_dp1 to lie in (mixt_frac, 1)
+      X_u_dp1 = X_u_dp1 * (one_dp - mixt_frac) + mixt_frac
+
+      cloud_frac_i  = real( pdf_params%cloud_frac_2, kind=dp )
+      precip_frac_i = real( hydromet_pdf_params%precip_frac_2, kind=dp )
+
+    end if ! category%l_in_component_1
+
+    !--------------------------------------------------------
+    ! Scale dp2 variate to be in or out of precipitation
+    !--------------------------------------------------------
+    if ( category%l_in_precip ) then
+      ! Samples in precipitation have a dp2 variate that satisfies
+      ! 0 < X_u_dp2 < precip_frac_i
+      ! Scale X_u_dp2 to lie in (0,precip_frac_i)
+      X_u_dp2 = X_u_dp2 * precip_frac_i
+    else
+      ! Scale and translate X_u_dp2 to lie in (precip_frac_i,1)
+      X_u_dp2 = X_u_dp2 * (one_dp - precip_frac_i) + precip_frac_i
+    end if
+
+    !--------------------------------------------------------
+    ! Scale chi variate to be in or out of cloud
+    !--------------------------------------------------------
+    if ( category%l_in_cloud ) then
+      ! Samples in cloud have a chi variate that satisfies
+      ! (1.0 - cloud_frac_i) < X_u_chi < 1
+      ! Scale and translate X_u_chi to lie in ( (1 - cloud_frac_i) , 1 )
+      X_u_chi = X_u_chi * cloud_frac_i + (one_dp - cloud_frac_i)
+    else
+      ! Scale X_u_chi to lie in ( 0, (1 - cloud_frac_i) )
+      X_u_chi = X_u_chi * (one_dp - cloud_frac_i)
+    end if
+
+    return
+  end subroutine scale_sample_to_category
+!-----------------------------------------------------------------------
+
+!-----------------------------------------------------------------------
+  function prescribe_importance_probs( importance_categories, category_real_probs ) &
+
+  result( category_prescribed_probs )
+
+  ! Description:
+  !   Outputs a prescribed value for the probability of each importance category
+
+  ! References:
+  !   None
+  !-----------------------------------------------------------------------
+
+    ! Included Modules
+    use clubb_precision, only: &
+      core_rknd
+
+    implicit none
+
+    ! Local Constants
+    real( kind = core_rknd ), parameter :: &
+      prob_thresh = 1.0e-8_core_rknd
+
+    ! Input Variables
+    type(importance_category_type), dimension(num_importance_categories), intent(in) :: &
+      importance_categories   ! A list of importance categories
+
+    real( kind = core_rknd ), dimension(num_importance_categories), intent(in) :: &
+      category_real_probs     ! The real probability for each category
+
+    ! Output Variable
+    real( kind = core_rknd ), dimension(num_importance_categories) :: &
+      category_prescribed_probs ! Probability of each category, scaled such that approximately half
+                                ! of all sample points will appear in cloud
+
+    ! Local Variables
+    integer :: icategory, jcategory
+
+    logical :: l_in_cloud, l_in_component_1, l_in_precip
+
+  !-----------------------------------------------------------------------
+
+    !----- Begin Code -----
+
+    do icategory=1, num_importance_categories
+
+      l_in_cloud       = importance_categories(icategory)%l_in_cloud
+      l_in_component_1 = importance_categories(icategory)%l_in_component_1
+      l_in_precip      = importance_categories(icategory)%l_in_precip
+
+      if ( l_in_cloud .and. l_in_precip .and. l_in_component_1 ) then
+        category_prescribed_probs(icategory) = 0.25_core_rknd
+
+      else if ( l_in_cloud .and. l_in_precip .and. (.not. l_in_component_1) ) then
+        category_prescribed_probs(icategory) = 0.25_core_rknd
+
+      else if ( l_in_cloud .and. (.not. l_in_precip) .and. l_in_component_1 ) then
+        category_prescribed_probs(icategory) = 0.0625_core_rknd
+
+      else if ( l_in_cloud .and. (.not. l_in_precip) .and. (.not. l_in_component_1) ) then
+        category_prescribed_probs(icategory) = 0.0625_core_rknd
+
+      else if ( (.not. l_in_cloud) .and. l_in_precip .and. l_in_component_1 ) then
+        category_prescribed_probs(icategory) = 0.125_core_rknd
+
+      else if ( (.not. l_in_cloud) .and. l_in_precip .and. (.not. l_in_component_1) ) then
+        category_prescribed_probs(icategory) = 0.125_core_rknd
+
+      else if ( (.not. l_in_cloud) .and. (.not. l_in_precip) .and. l_in_component_1 ) then
+        category_prescribed_probs(icategory) = 0.0625_core_rknd
+
+      else if ( (.not. l_in_cloud) .and. (.not. l_in_precip) .and. (.not. l_in_component_1) ) then
+        category_prescribed_probs(icategory) = 0.0625_core_rknd
+
+      else
+        stop "Invalid category in prescribe_importance_probs"
+      end if
+
+    end do ! icategory=1, num_importance_categories
+
+    ! The following loop ensures that we do not sample from categories that have
+    ! no PDF weight
+    do icategory=1, num_importance_categories
+
+      if ( category_real_probs(icategory) < prob_thresh .and. &
+           category_prescribed_probs(icategory) > category_real_probs(icategory) ) then
+        ! Do not perform importance_sampling on this category
+        ! Transfer all prescribed mass of this category the most important one available.
+        do jcategory=1, num_importance_categories
+
+          if ( category_real_probs(jcategory) >= prob_thresh ) then
+            category_prescribed_probs(jcategory) = category_prescribed_probs(jcategory) + &
+                         ( category_prescribed_probs(icategory) - category_real_probs(icategory) )
+            exit
+          end if
+
+        end do
+
+        category_prescribed_probs(icategory) = category_real_probs(icategory)
+
+      end if
+
+    end do ! icategory=1, num_importance_categories
+
+    return
+  end function prescribe_importance_probs
+!-----------------------------------------------------------------------
+
+!-----------------------------------------------------------------------
+  function cloud_importance_sampling( importance_categories, category_real_probs, &
+                                      pdf_params ) &
+
+  result( category_prescribed_probs )
+
+  ! Description:
+  !   Applies cloud weighted sampling such that approximately half of all
+  !   sample points land in cloud and half land out of cloud!
+
+  ! References:
+  !   None :(
+  !-----------------------------------------------------------------------
+
+    ! Included Modules
+    use clubb_precision, only: &
+      core_rknd
+
+    use pdf_parameter_module, only: &
+      pdf_parameter
+
+    use constants_clubb, only: &
+      one,  &    ! Constant(s)
+      two,  &
+      zero, &
+      fstderr
+
+    use pdf_utilities, only: &
+      compute_mean_binormal
+
+    implicit none
+
+    ! Local Constants
+    real( kind = core_rknd ), parameter :: &
+      cloud_frac_min_samp = 0.001_core_rknd, &  ! Minimum cloud fraction for sampling
+                                                ! preferentially within cloud
+      cloud_frac_max_samp = 0.5_core_rknd       ! Maximum cloud fraction (exclusive) for
+                                                ! sampling preferentially within cloud
+
+    ! Input Variables
+    type(importance_category_type), dimension(num_importance_categories), intent(in) :: &
+      importance_categories   ! A list of importance categories
+
+    real( kind = core_rknd ), dimension(num_importance_categories), intent(in) :: &
+      category_real_probs     ! The actual PDF probability for each category
+
+    type(pdf_parameter), intent(in) :: &
+      pdf_params
+
+    ! Output Variable
+    real( kind = core_rknd ), dimension(num_importance_categories) :: &
+      category_prescribed_probs ! Probability of each category, scaled such that approximately half
+                                ! of all sample points will appear in cloud
+
+    ! Local Variables
+    real( kind = core_rknd ) :: &
+      cloud_frac
+    integer :: icategory
+
+  !-----------------------------------------------------------------------
+
+    !----- Begin Code -----
+
+    cloud_frac = compute_mean_binormal( pdf_params%cloud_frac_1, pdf_params%cloud_frac_2, &
+                                        pdf_params%mixt_frac )
+
+    if ( cloud_frac >= cloud_frac_min_samp .and. cloud_frac < cloud_frac_max_samp ) then
+
+      ! In-cloud categories ought to be divided by 2*cloud_frac
+      ! Out-of-cloud categories should be divided by 2*(1-cloud_frac)
+
+      do icategory=1, num_importance_categories
+        if ( importance_categories(icategory)%l_in_cloud ) then
+          category_prescribed_probs(icategory) = &
+            category_real_probs(icategory) / (two*cloud_frac)
+        else
+          category_prescribed_probs(icategory) = &
+            category_real_probs(icategory) / (two*(one-cloud_frac))
+        end if ! importance_categories(icategory)%l_in_cloud
+      end do
+
+    else ! cloud_frac < cloud_frac_min_samp .or. cloud_frac >= cloud_frac_max_samp
+
+      ! Do not perform cloud weighted sampling. Let the probabilities remain unmodified.
+      category_prescribed_probs = category_real_probs
+
+    end if ! cloud_frac < cloud_frac_min_samp .or. cloud_frac >= cloud_frac_max_samp
+
+    return
+  end function cloud_importance_sampling
+!-----------------------------------------------------------------------
+
+!-------------------------------------------------------------------------------
+  subroutine importance_sampling_assertions &
+             ( num_samples, importance_categories, category_real_probs, &
+               category_prescribed_probs, category_sample_weights, X_u_chi_one_lev, &
+               X_u_dp1_one_lev, X_u_dp2_one_lev, int_sample_category, &
+               pdf_params, hydromet_pdf_params, &
+               l_error )
+
+  ! Description:
+  !   Various assertion checks for importance sampling are performed here.
+
+  ! References:
+  !   None
+  !-----------------------------------------------------------------------
+
+    use clubb_precision, only: &
+      core_rknd, &          ! Precision(s)
+      dp
+
+    use constants_clubb, only: &
+      zero, &               ! Constant(s)
+      one, &
+      fstderr
+
+    use pdf_parameter_module, only: &
+      pdf_parameter
+
+    use hydromet_pdf_parameter_module, only: &
+      hydromet_pdf_parameter
+
+    implicit none
+
+    ! Input Variables
+    integer :: &
+      num_samples                         ! Number of SILHS sample points
+
+    type(importance_category_type), dimension(num_importance_categories), intent(in) :: &
+      importance_categories               ! The defined importance categories
+
+    real( kind = core_rknd ), dimension(num_importance_categories), intent(in) :: &
+      category_real_probs,        &       ! The real PDF probabilities for each category
+      category_prescribed_probs,  &       ! Prescribed probability for each category
+      category_sample_weights             ! Sample weight for each category
+
+    real( kind = dp ), dimension(num_samples), intent(in) :: &
+      X_u_chi_one_lev, &                  ! Samples of chi in uniform space
+      X_u_dp1_one_lev, &                  ! Samples of the dp1 variate
+      X_u_dp2_one_lev                     ! Samples of the dp2 variate
+
+    integer, dimension(num_samples), intent(in) :: &
+      int_sample_category                 ! An integer for each sample corresponding to the
+                                          ! category picked for the sample
+
+    type(pdf_parameter), intent(in) :: &
+      pdf_params
+
+    type(hydromet_pdf_parameter), intent(in) :: &
+      hydromet_pdf_params
+
+    ! Output Variables
+    logical, intent(out) :: &
+      l_error                             ! True if the assertion check fails.
+
+    ! Local Variables
+    real( kind = core_rknd ) :: &
+      category_sum, tolerance
+
+    real( kind = dp ) :: &
+      cloud_frac_i, precip_frac_i
+
+    integer :: isample
+
+    type(importance_category_type) :: category
+
+  !-----------------------------------------------------------------------
+
+    !----- Begin Code -----
+    l_error = .false.
+
+    !----------------------------------------------------------
+    ! Assert that each of the probability groups sum to 1.0
+    !----------------------------------------------------------
+    tolerance = real( num_importance_categories, kind=core_rknd ) * epsilon( category_sum )
+
+    category_sum = sum( category_real_probs )
+    if ( abs( category_sum - one ) > tolerance ) then
+      write(fstderr,*) "The real category probabilities do not sum to one."
+      write(fstderr,*) "sum( category_real_probs ) = ", category_sum
+      l_error = .true.
+    end if
+
+    category_sum = sum( category_prescribed_probs )
+    if ( abs( category_sum - one ) > tolerance ) then
+      write(fstderr,*) "The prescribed category probabilities do not sum to one."
+      write(fstderr,*) "sum( category_prescribed_probs ) = ", category_sum
+      l_error = .true.
+    end if
+
+    category_sum = sum( category_sample_weights * category_prescribed_probs )
+    if ( abs( category_sum - one ) > tolerance ) then
+      write(fstderr,*) "The weighted prescribed category probabilities do not sum to one."
+      write(fstderr,*) "sum( category_sample_weights * category_prescribed_probs ) = ", category_sum
+      l_error = .true.
+    end if
+
+    !---------------------------------------------------------------------
+    ! Verify that samples have been correctly scaled to reside in the
+    ! appropriate category
+    !---------------------------------------------------------------------
+    do isample = 1, num_samples
+
+      category = importance_categories(int_sample_category(isample))
+
+      ! Verification of component
+      if ( category%l_in_component_1 ) then
+        if ( X_u_dp1_one_lev(isample) > real( pdf_params%mixt_frac, kind=dp ) ) then
+          write(fstderr,*) "The component of a sample is incorrect."
+          l_error = .true.
+        end if
+        cloud_frac_i = real( pdf_params%cloud_frac_1, kind=dp )
+        precip_frac_i = real( hydromet_pdf_params%precip_frac_1, kind=dp )
+      else ! .not. category%l_in_component_1
+        if ( X_u_dp1_one_lev(isample) < real( pdf_params%mixt_frac, kind=dp ) ) then
+          write(fstderr,*) "The component of a sample is incorrect."
+          l_error = .true.
+        end if
+        cloud_frac_i = real( pdf_params%cloud_frac_2, kind=dp )
+        precip_frac_i = real( hydromet_pdf_params%precip_frac_2, kind=dp )
+      end if ! category%l_in_component_1
+
+      ! Verification of cloud
+      if ( category%l_in_cloud ) then
+        if ( X_u_chi_one_lev(isample) < (one - cloud_frac_i) ) then
+          write(fstderr,*) "The chi element of a sample is incorrect."
+          l_error = .true.
+        end if
+      else
+        if ( X_u_chi_one_lev(isample) > (one - cloud_frac_i) ) then
+          write(fstderr,*) "The chi element of a sample is incorrect."
+          l_error = .true.
+        end if
+      end if
+
+      ! Verification of precipitation
+      if ( category%l_in_precip ) then
+        if ( X_u_dp2_one_lev(isample) > precip_frac_i ) then
+          write(fstderr,*) "The in-precipitation status of a sample is incorrect."
+          l_error = .true.
+        end if
+      else
+        if ( X_u_dp2_one_lev(isample) < precip_frac_i ) then
+          write(fstderr,*) "The in-precipitation status of a sample is incorrect."
+          l_error = .true.
+        end if
+      end if
+
+    end do ! isample = 1, num_samples
+
+    return
+  end subroutine importance_sampling_assertions
+!-------------------------------------------------------------------------------
+
+
+!-------------------------------------------------------------------------------
+  subroutine cloud_weighted_sampling_driver &
+             ( num_samples, p_matrix_chi, p_matrix_dp1, &
+               cloud_frac_1, cloud_frac_2, mixt_frac, &
+               X_u_chi, X_u_dp1, &
+               lh_sample_point_weights, l_half_in_cloud )
+
+  ! Description:
+  !   Performs importance sampling such that half of sample points are in cloud
+
+  ! References:
+  !   None
+  !-----------------------------------------------------------------------
+
+    use clubb_precision, only: &
+      core_rknd, &          ! Precision(s)
+      dp
+
+    use generate_lh_sample_module, only: &
+      generate_uniform_sample ! Procedure
+
+    use pdf_utilities, only: &
+      compute_mean_binormal
+
+    use constants_clubb, only: &
+      one
+
+    implicit none
+
+    ! Parameter Constants
+    logical, parameter :: &
+      l_use_rejection_method = .false.    ! Find in and out of cloud points using the rejection
+                                          ! method rather than scaling
+
+    real( kind = core_rknd ), parameter :: &
+      cloud_frac_min_samp = 0.001_core_rknd, &  ! Minimum cloud fraction for sampling
+                                                ! preferentially within cloud
+      cloud_frac_max_samp = 0.5_core_rknd       ! Maximum cloud fraction (exclusive) for
+                                                ! sampling preferentiallywithin cloud
+
+    ! Input Variables
+    integer :: &
+      num_samples                         ! Number of SILHS sample points
+
+    integer, dimension(num_samples), intent(in) :: &
+      p_matrix_chi, &                     ! Permutation of the integers 0..num_samples
+                                          ! from p_matrix for chi
+      p_matrix_dp1                        ! Elements from p_matrix for dp1 element
+
+    real( kind = core_rknd ), intent(in) :: &
+      cloud_frac_1, &                     ! Cloud fraction in PDF component 1
+      cloud_frac_2, &                     ! Cloud fraction in PDF component 2
+      mixt_frac                           ! Weight of first gaussian component
+
+    ! Input/Output Variables
+    real( kind = dp ), dimension(num_samples), intent(inout) :: &
+      X_u_chi, &                          ! Samples of chi in uniform space
+      X_u_dp1                             ! Samples of the dp1 variate for determining mixture
+                                          ! component
+
+    ! Output Variables
+    real( kind = core_rknd ), dimension(num_samples), intent(out) :: &
+      lh_sample_point_weights             ! Weight of SILHS sample points (these must be applied
+                                          ! when averaging results from, e.g., calling microphysics
+
+    logical, intent(out) :: &
+      l_half_in_cloud                     ! True if half of sample points are in cloud. Used
+                                          ! for assertion checks later in the code
+
+    ! Local Variables
+    real( kind = core_rknd ) :: &
+      cloud_frac                          ! Cloud fraction at k_lh_start
+
+    real( kind = dp ), dimension(num_samples/2,1) :: &
+      mixt_rand_cloud, &                  ! Stratified random variable for determining mixture
+                                          ! component in cloud
+      mixt_rand_clear                     ! Stratified random variable for determining mixture
+                                          ! component in clear air
+
+    real( kind = dp ) :: &
+      mixt_rand_element
+
+    real( kind = core_rknd ) :: &
+      lh_sample_cloud_weight,     &       ! Weight of a cloudy sample point
+      lh_sample_clear_weight              ! Weight of a clear  sample point
+
+    integer, dimension(num_samples/2,1) :: &
+      mixt_permuted_cloud, &              ! Permuted random numbers for mixt_rand_cloud
+      mixt_permuted_clear                 ! Permuted random numbers for mixt_rand_clear
+
+    integer :: sample, n_cloudy_samples, n_clear_samples
+    logical :: l_cloudy_sample
+
+  !-----------------------------------------------------------------------
+
+    !----- Begin Code -----
+
+    cloud_frac = compute_mean_binormal( cloud_frac_1, cloud_frac_2, mixt_frac )
+
+    if ( cloud_frac >= cloud_frac_min_samp .and. cloud_frac < cloud_frac_max_samp ) then
+
+      n_cloudy_samples = 0
+      n_clear_samples  = 0
+      ! Pick two stratified random numbers for determining a mixture fraction.
+      do sample=1, num_samples
+        ! We arbitrarily choose that p_matrix elements less than num_samples/2
+        ! will be used for mixt_rand_cloud
+        if ( p_matrix_dp1(sample) < ( num_samples / 2 ) ) then
+          n_cloudy_samples = n_cloudy_samples + 1
+          mixt_permuted_cloud(n_cloudy_samples,1) = p_matrix_dp1(sample)
+        else if ( p_matrix_dp1(sample) >= ( num_samples / 2 ) ) then
+          n_clear_samples = n_clear_samples + 1
+          mixt_permuted_clear(n_clear_samples,1) = p_matrix_dp1(sample) - (num_samples / 2)
+        end if ! p_matrix_dp1(sample) < ( num_samples / 2 )
+      end do
+      ! Generate the stratified uniform numbers!
+      call generate_uniform_sample( num_samples/2, num_samples/2, 1, mixt_permuted_cloud, & !In
+                                    mixt_rand_cloud ) !Out
+      call generate_uniform_sample( num_samples/2, num_samples/2, 1, mixt_permuted_clear, & !In
+                                    mixt_rand_clear ) !Out
+
+      n_cloudy_samples = 0
+      n_clear_samples  = 0
+
+      ! Compute weights for each type of point
+      lh_sample_cloud_weight = 2._core_rknd * cloud_frac
+      lh_sample_clear_weight = 2._core_rknd - lh_sample_cloud_weight
+
+      do sample=1, num_samples
+
+        ! Detect which half of the sample points are in clear air and which half are in
+        ! the cloudy air
+        if ( p_matrix_chi(sample) < ( num_samples / 2 ) ) then
+
+          l_cloudy_sample = .false.
+          lh_sample_point_weights(sample) = lh_sample_clear_weight
+          n_clear_samples = n_clear_samples + 1
+          mixt_rand_element = mixt_rand_clear(n_clear_samples,1)
+        else
+
+          l_cloudy_sample = .true.
+          lh_sample_point_weights(sample) = lh_sample_cloud_weight
+          n_cloudy_samples = n_cloudy_samples + 1
+          mixt_rand_element = mixt_rand_cloud(n_cloudy_samples,1)
+        end if
+
+        if ( l_use_rejection_method ) then
+          ! Use the rejection method to select points that are in or out of cloud
+          call choose_X_u_reject &
+               ( l_cloudy_sample, cloud_frac_1, & ! In
+                 cloud_frac_2, mixt_frac, & !In
+                 X_u_dp1(sample), X_u_chi(sample) ) ! Out
+
+        else ! Transpose and scale the points to be in or out of cloud
+          call choose_X_u_scaled &
+               ( l_cloudy_sample, & ! In
+                 p_matrix_chi(sample), num_samples, & ! In
+                 cloud_frac_1, cloud_frac_2, & ! In
+                 mixt_frac, mixt_rand_element, & !In
+                 X_u_dp1(sample), X_u_chi(sample) ) ! Out
+        end if
+
+      end do ! sample=1, num_samples
+
+      l_half_in_cloud = .true.
+
+    else ! cloud_frac < cloud_frac_min_samp .or. cloud_frac >= cloud_frac_max_samp
+
+      ! Do not perform cloud weighted sampling.
+      l_half_in_cloud = .false.
+      lh_sample_point_weights(:) = one
+
+    end if ! cloud_frac >= cloud_frac_min_samp .and. cloud_frac < cloud_frac_max_samp
+
+    return
+  end subroutine cloud_weighted_sampling_driver
+!-------------------------------------------------------------------------------
+
+!-------------------------------------------------------------------------------
+  function generate_strat_uniform_variate( num_samples ) &
+
+  result( stratified_variate )
+
+  ! Description:
+  !   Generates a stratified uniform sample for a single variable
+
+  ! References:
+  !   None
+  !-----------------------------------
+
+    use clubb_precision, only: &
+      core_rknd    ! Constant
+
+    use permute_height_time_module, only: &
+      rand_permute ! Procedure
+
+    use generate_lh_sample_module, only: &
+      choose_permuted_random
+
+    implicit none
+
+    ! Input Variable
+    integer, intent(in) :: &
+      num_samples ! Number of SILHS sample points
+
+    ! Output Variable
+    real( kind = core_rknd ), dimension(num_samples) :: &
+      stratified_variate      ! Uniform samples stratified in (0,1)
+
+    ! Local Variables
+
+    ! Vector of the integers 0,1,2,...,num_samples in random order
+    integer, dimension(num_samples) :: pvect
+
+    integer :: sample
+
+  !-----------------------------------------------------------------------
+    !----- Begin Code -----
+
+    !-------------------------------------------------------------------
+    ! Draw the integers 0,1,2,...,num_samples in random order
+    !-------------------------------------------------------------------
+    call rand_permute( num_samples, pvect )
+
+    !----------------------------------------------------------------------
+    ! For each permuted integer (each box), determine a random real number
+    !----------------------------------------------------------------------
+    do sample=1, num_samples
+      stratified_variate(sample) = &
+        real( choose_permuted_random( num_samples, pvect(sample) ), kind = core_rknd )
+    end do
+
+    return
+  end function generate_strat_uniform_variate
+!-------------------------------------------------------------------------------
+  subroutine assert_consistent_cloud_frac( pdf_params, l_error )
+
+  ! Description:
+  !   Performs an assertion check that cloud_frac_i is consistent with chi_i and
+  !   stdev_chi_i in pdf_params for each PDF component.
+
+  ! References:
+  !   Eric Raut
+  !-----------------------------------------------------------------------
+
+    use constants_clubb, only: &
+      fstderr          ! Constant
+
+    use pdf_parameter_module, only: &
+      pdf_parameter    ! Type
+
+    implicit none
+
+    ! Input Variables
+    type(pdf_parameter), intent(in) :: &
+      pdf_params       ! PDF parameters, containing distribution of chi     [units vary]
+                       ! and cloud fraction
+
+    ! Output Variables
+    logical, intent(out) :: &
+      l_error          ! True if the assertion check fails
+
+    ! Local Variables
+    logical :: &
+      l_error_in_sub
+
+  !-----------------------------------------------------------------------
+
+    !----- Begin Code -----
+    l_error = .false.
+
+    ! Perform assertion check for PDF component 1
+    call assert_consistent_cf_component &
+         ( pdf_params%chi_1, pdf_params%stdev_chi_1, pdf_params%cloud_frac_1, & ! Intent(in)
+           l_error_in_sub )                                                    ! Intent(out)
+
+    l_error = l_error .or. l_error_in_sub
+    if ( l_error_in_sub ) then
+      write(fstderr,*) "Cloud fraction is inconsistent in PDF component 1"
+    end if
+
+    ! Perform assertion check for PDF component 2
+    call assert_consistent_cf_component &
+         ( pdf_params%chi_2, pdf_params%stdev_chi_2, pdf_params%cloud_frac_2, & ! Intent(in)
+           l_error_in_sub )                                                    ! Intent(out)
+
+    l_error = l_error .or. l_error_in_sub
+    if ( l_error_in_sub ) then
+      write(fstderr,*) "Cloud fraction is inconsistent in PDF component 2"
+    end if
+
+    return
+  end subroutine assert_consistent_cloud_frac
+!-------------------------------------------------------------------------------
+
+
+!-------------------------------------------------------------------------------
+  subroutine assert_consistent_cf_component( mu_chi_i, sigma_chi_i, cloud_frac_i, &
+                                             l_error )
+
+  ! Description:
+  !   Performs an assertion check that cloud_frac_i is consistent with chi_i and
+  !   stdev_chi_i for a PDF component.
+  !
+  !   The SILHS sample generation process relies on precisely a cloud_frac
+  !   amount of mass in the cloudy portion of the PDF of chi, that is, where
+  !   chi > 0. In other words, the probability that chi > 0 should be exactly
+  !   cloud_frac.
+  !
+  !   Stated even more mathematically, CDF_chi(0) = 1 - cloud_frac, where
+  !   CDF_chi is the cumulative distribution function of chi. This can be
+  !   expressed as invCDF_chi(1 - cloud_frac) = zero.
+  !
+  !   This subroutine uses ltqnorm, which is apparently a fancy name for the
+  !   inverse cumulative distribution function of the standard normal
+  !   distribution.
+
+  ! References:
+  !   Eric Raut
+  !-----------------------------------------------------------------------
+
+    ! Included Modules
+    use clubb_precision, only: &
+      core_rknd, &     ! Constant(s)
+      dp
+
+    use constants_clubb, only: &
+      fstderr, &       ! Constant(s)
+      zero
+
+    use pdf_parameter_module, only: &
+      pdf_parameter    ! Type
+
+    use generate_lh_sample_module, only: &
+      ltqnorm          ! Procedure
+
+    implicit none
+
+    ! Local Constants
+    real( kind = core_rknd ), parameter :: &
+      cloud_frac_min = 1.0e-5_core_rknd
+
+    ! Input Variables
+    real( kind = core_rknd ), intent(in) :: &
+      mu_chi_i,      & ! Mean of chi in a PDF component
+      sigma_chi_i,   & ! Standard deviation of chi in a PDF component
+      cloud_frac_i     ! Cloud fraction in a PDF component
+
+    ! Output Variables
+    logical, intent(out) :: &
+      l_error          ! True if the assertion check fails
+
+    ! Local Variables
+    real( kind = core_rknd ) :: cloud_boundary, cloud_boundary_std_normal, boundary_tol
+
+  !-----------------------------------------------------------------------
+
+    !----- Begin Code -----
+    l_error = .false.
+
+    ! This value of boundary_tol seems to work.
+    boundary_tol = 0.1_core_rknd * sigma_chi_i
+
+    ! We need to handle the special cases where cloud_frac_i is either very large or very small.
+    if ( cloud_frac_i < cloud_frac_min ) then
+      ! Special case #1
+      cloud_boundary_std_normal = real( ltqnorm( real( 1._core_rknd - (cloud_frac_min + &
+              epsilon( cloud_frac_min ) ), kind=dp ) ), kind=core_rknd )
+      cloud_boundary = cloud_boundary_std_normal * sigma_chi_i + mu_chi_i
+      if ( cloud_boundary > boundary_tol ) then
+        l_error = .true.
+      end if
+    else if ( cloud_frac_i > ( 1._core_rknd - cloud_frac_min ) ) then
+      ! Special case #2
+      cloud_boundary_std_normal = real( ltqnorm( real( 1._core_rknd - (1._core_rknd - &
+               ( cloud_frac_min + epsilon( cloud_frac_min ) )), kind=dp ) ), kind=core_rknd )
+      cloud_boundary = cloud_boundary_std_normal * sigma_chi_i + mu_chi_i
+      if ( cloud_boundary < -boundary_tol ) then
+        l_error = .true.
+      end if
+
+    else if ( cloud_frac_i >= cloud_frac_min .and. &
+              cloud_frac_i <= ( 1._core_rknd - cloud_frac_min ) ) then
+      ! Most likely case (hopefully)
+      cloud_boundary_std_normal = real( ltqnorm( real( 1._core_rknd - cloud_frac_i, kind=dp ) ), &
+             kind=core_rknd )
+      cloud_boundary = cloud_boundary_std_normal * sigma_chi_i + mu_chi_i
+
+      if ( abs( cloud_boundary ) > boundary_tol ) then
+        l_error = .true.
+      end if
+    else
+      stop "Should not be here in assert_consistent_cf_component"
+    end if  ! cloud_frac_i < cloud_frac_min
+
+    if ( l_error ) then
+      write(fstderr,*) "In assert_consistent_cf_component, cloud_frac_i is inconsistent with &
+                       &mu_chi_i and stdev_chi_i."
+      write(fstderr,*) "mu_chi_i = ", mu_chi_i
+      write(fstderr,*) "sigma_chi_i = ", sigma_chi_i
+      write(fstderr,*) "cloud_frac_i = ", cloud_frac_i
+      write(fstderr,*) "cloud_boundary = ", cloud_boundary
+    end if
+
+    return
+  end subroutine assert_consistent_cf_component
+!-------------------------------------------------------------------------------
+
+!-------------------------------------------------------------------------------
+  subroutine assert_correct_cloud_normal( num_samples, X_u_chi, X_nl_chi, X_mixt_comp, &
+                                          cloud_frac_1, cloud_frac_2, &
+                                          l_error )
+
+  ! Description:
+  !   Asserts that all SILHS sample points that are in cloud in uniform space
+  !   are in cloud in normal space, and that all SILHS sample points that are
+  !   in clear air in uniform space are in clear air in normal space.
+  
+  ! References:
+  !   None
+  !-----------------------------------------------------------------------
+  
+    ! Included Modules
+    use clubb_precision, only: &
+      dp, &           ! Constant(s)
+      core_rknd
+
+    use constants_clubb, only: &
+      one,     &
+      zero_dp, &      ! Constant(s)
+      fstderr
+
+    implicit none
+
+    ! Input Variables
+    integer, intent(in) :: &
+      num_samples            ! Number of SILHS sample points
+
+    real( kind = dp ), dimension(num_samples), intent(in) :: &
+      X_u_chi,  &            ! Samples of chi in uniform space
+      X_nl_chi               ! Samples of chi in normal space
+
+    integer, dimension(num_samples), intent(in) :: &
+      X_mixt_comp            ! PDF component of each sample
+
+    real( kind = core_rknd ), intent(in) :: &
+      cloud_frac_1,   &      ! Cloud fraction in PDF component 1
+      cloud_frac_2           ! Cloud fraction in PDF component 2
+
+    ! Output Variables
+    logical, intent(out) :: &
+      l_error                ! True if the assertion check fails
+
+    ! Local Variables
+    real( kind = dp ) :: &
+      cloud_frac_i
+
+    integer :: sample
+
+  !-----------------------------------------------------------------------
+
+    !----- Begin Code -----
+    l_error = .false.
+
+    do sample = 1, num_samples, 1
+
+      ! Determine the appropriate cloud fraction
+      if ( X_mixt_comp(sample) == 1 ) then
+        cloud_frac_i = real( cloud_frac_1, kind=dp )
+      else if ( X_mixt_comp(sample) == 2 ) then
+        cloud_frac_i = real( cloud_frac_2, kind=dp )
+      end if
+
+      if ( X_u_chi(sample) < (one - cloud_frac_i) ) then
+
+        ! The uniform sample is in clear air
+        if ( X_nl_chi(sample) > zero_dp ) then
+          l_error = .true.
+        end if
+
+      else if ( X_u_chi(sample) >= (one - cloud_frac_i) .and. &
+                X_u_chi(sample) < one ) then
+
+        ! The uniform sample is in cloud
+        if ( X_nl_chi(sample) <= zero_dp ) then
+          l_error = .true.
+        end if
+
+      else
+        stop "X_u_chi not in correct range in assert_correct_cloud_normal"
+      end if
+
+    end do ! 1..num_samples
+
+    if ( l_error ) then
+      write(fstderr,*) "In assert_correct_cloud_normal:"
+      write(fstderr,*) "The 'cloudiness' of points in uniform and normal space is not consistent"
+      write(fstderr,'(4X,A,A)')  "X_u_chi         ", "X_nl_chi "
+      do sample = 1, num_samples, 1
+        write(fstderr,'(I4,2G20.4)') &
+          sample, X_u_chi(sample), X_nl_chi(sample)
+      end do
+      ! This will hopefully stop the run at some unknown point in the future
+      l_error = .true.
+    end if  ! in_cloud_points /= out_of_cloud_points
+
+    return
+  end subroutine assert_correct_cloud_normal
+!-------------------------------------------------------------------------------
+
+!-------------------------------------------------------------------------------
+  subroutine assert_unity_sample_weights( num_samples, lh_sample_point_weights, &
+                                          l_error )
+
+  ! Description:
+  !   Performs an assertion check that the average of all the sample points is one.
+  
+  ! References:
+  !   None
+  !-----------------------------------------------------------------------
+  
+    ! Included Modules
+    use clubb_precision, only: &
+      dp,           & ! Precision(s) are required to be compile-time constant(s)
+      core_rknd
+
+    use constants_clubb, only: &
+      zero_dp, &      ! Constant
+      one_dp, &
+      fstderr
+
+    implicit none
+
+    ! Input Variables
+    integer, intent(in) :: &
+      num_samples      ! Number of SILHS sample points
+
+    real( kind = core_rknd ), dimension(num_samples), intent(in) :: &
+      lh_sample_point_weights ! Weight of each SILHS sample
+
+    ! Output Variables
+    logical, intent(out) :: &
+      l_error          ! True if the assertion check fails
+
+    ! Local Variables
+
+    ! Try to obtain 12 digit accuracy for a diagnostic mean
+    real( kind = dp ) :: mean_weight
+
+    integer :: sample
+
+  !-----------------------------------------------------------------------
+
+    !----- Begin Code -----
+    l_error = .false.
+
+    ! Assertion check to ensure that the sample point weights sum to approximately 1
+    mean_weight = 0._dp
+    do sample = 1, num_samples
+      mean_weight = mean_weight + real( lh_sample_point_weights(sample), kind=dp )
+    end do
+    mean_weight = mean_weight / real( num_samples, kind=dp )
+
+    ! Using more precision for mean_weight should make this work out.
+    ! The formula below could probably be redefined to estimate maximal ulps
+    ! given the precision of lh_sample_point_weights and the number of
+    ! num_samples, but the formula below seems to be an ok approximation
+    ! when we're using 4 or 8 byte precision floats.
+    ! -dschanen 19 Nov 2010
+    if ( abs( mean_weight - 1.0_dp ) > &
+        real( num_samples, kind=dp ) * max( epsilon( mean_weight ), &
+          real( epsilon( lh_sample_point_weights ), kind=dp ) ) ) then
+      write(fstderr,*) "Error in cloud weighted sampling code ", "mean_weight = ", mean_weight
+      l_error = .true.
+    end if
+
+    return
+  end subroutine assert_unity_sample_weights
+!-------------------------------------------------------------------------------
+
+!-------------------------------------------------------------------------------
+  subroutine latin_hypercube_2D_output &
+             ( fname_prefix, fdir, stats_tout, nz, &
+               stats_zt, time_initial, num_samples )
+!-------------------------------------------------------------------------------
+
+    use corr_varnce_module, only: &
+      iiPDF_chi, & ! Variables
+      iiPDF_eta, &
+      iiPDF_w, &
+      iiPDF_rr, & 
+      iiPDF_ri, &
+      iiPDF_rs, &
+      iiPDF_rg, &
+      iiPDF_Nr, &
+      iiPDF_Ni, &
+      iiPDF_Ns, &
+      iiPDF_Ng, &
+      iiPDF_Ncn
+
+    use clubb_precision, only: &
+      time_precision, & ! Constant
+      core_rknd
+
+    use output_2D_samples_module, only: &
+      open_2D_samples_file ! Procedure
+
+    use output_2D_samples_module, only: &
+      lognormal_sample_file, & ! Instance of a type
+      uniform_sample_file
+
+    use corr_varnce_module, only: &
+      d_variables ! Variable
+
+
+    implicit none
+
+    ! Input Variables
+    character(len=*), intent(in) :: &
+      fname_prefix, & ! Prefix for file name
+      fdir            ! Directory for output
+
+    real(kind=core_rknd), intent(in) :: &
+      stats_tout    ! Frequency to write to disk        [s]
+
+    real(kind=time_precision), intent(in) :: &
+      time_initial  ! Initial time                      [s]
+
+    integer, intent(in) :: &
+      nz ! Number of vertical levels
+
+    real( kind = core_rknd ), dimension(nz), intent(in) :: &
+      stats_zt ! Altitudes [m]
+
+    integer, intent(in) :: num_samples
+
+    ! Local Variables
+    character(len=100), allocatable, dimension(:) :: &
+      variable_names, variable_descriptions, variable_units
+
+    integer :: i
+
+    ! ---- Begin Code ----
+
+    if ( l_output_2D_lognormal_dist ) then
+
+      allocate( variable_names(d_variables), variable_descriptions(d_variables), &
+                variable_units(d_variables) )
+
+      variable_names(iiPDF_chi)        = "chi"
+      variable_descriptions(iiPDF_chi) = "The variable 's' from Mellor 1977"
+      variable_units(iiPDF_chi)        = "kg/kg"
+
+      variable_names(iiPDF_eta)        = "eta"
+      variable_descriptions(iiPDF_eta) = "The variable 't' from Mellor 1977"
+      variable_units(iiPDF_eta)        = "kg/kg"
+
+      variable_names(iiPDF_w)        = "w"
+      variable_descriptions(iiPDF_w) = "Vertical velocity"
+      variable_units(iiPDF_w)        = "m/s"
+
+      if ( iiPDF_rr > 0 ) then
+        variable_names(iiPDF_rr)        = "rr"
+        variable_descriptions(iiPDF_rr) = "Rain water mixing ratio"
+        variable_units(iiPDF_rr)        = "kg/kg"
+      end if
+      if ( iiPDF_ri > 0 ) then
+        variable_names(iiPDF_ri)        = "ri"
+        variable_descriptions(iiPDF_ri) = "Ice water mixing ratio"
+        variable_units(iiPDF_ri)        = "kg/kg"
+      end if
+      if ( iiPDF_rs > 0 ) then
+        variable_names(iiPDF_rs)        = "rs"
+        variable_descriptions(iiPDF_rs) = "Snow water mixing ratio"
+        variable_units(iiPDF_rs)        = "kg/kg"
+      end if
+      if ( iiPDF_rg > 0 ) then
+        variable_names(iiPDF_rg)        = "rg"
+        variable_descriptions(iiPDF_rg) = "Graupel water mixing ratio"
+        variable_units(iiPDF_rg)        = "kg/kg"
+      end if
+
+      if ( iiPDF_Nr > 0 ) then
+        variable_names(iiPDF_Nr)        = "Nr"
+        variable_descriptions(iiPDF_Nr) = "Rain droplet number concentration"
+        variable_units(iiPDF_Nr)        = "count/kg"
+      end if
+      if ( iiPDF_Ncn > 0 ) then
+        variable_names(iiPDF_Ncn)        = "Ncn"
+        variable_descriptions(iiPDF_Ncn) = "Cloud nuclei concentration (simplified)"
+        variable_units(iiPDF_Ncn)        = "count/kg"
+      end if
+      if ( iiPDF_Ni > 0 ) then
+        variable_names(iiPDF_Ni)        = "Ni"
+        variable_descriptions(iiPDF_Ni) = "Ice number concentration"
+        variable_units(iiPDF_Ni)        = "count/kg"
+      end if
+      if ( iiPDF_Ns > 0 ) then
+        variable_names(iiPDF_Ns)        = "Ns"
+        variable_descriptions(iiPDF_Ns) = "Snow number concentration"
+        variable_units(iiPDF_Ns)        = "count/kg"
+      end if
+      if ( iiPDF_Ng > 0 ) then
+        variable_names(iiPDF_Ng)        = "Ng"
+        variable_descriptions(iiPDF_Ng) = "Graupel number concentration"
+        variable_units(iiPDF_Ng)        = "count/kg"
+      end if
+
+      call open_2D_samples_file( nz, num_samples, d_variables, & ! In
+                                 trim( fname_prefix )//"_nl", fdir, & ! In
+                                 time_initial, stats_tout, stats_zt, variable_names, & ! In
+                                 variable_descriptions, variable_units, & ! In
+                                 lognormal_sample_file ) ! In/Out
+
+      deallocate( variable_names, variable_descriptions, variable_units )
+
+    end if
+
+    if ( l_output_2D_uniform_dist ) then
+
+      allocate( variable_names(d_variables+5), variable_descriptions(d_variables+5), &
+                variable_units(d_variables+5) )
+
+      ! The uniform distribution corresponds to all the same variables as X_nl,
+      ! except the d+1 component is the mixture component.
+
+      variable_names(iiPDF_chi)        = "chi"
+      variable_descriptions(iiPDF_chi) = "Uniform dist of the variable 's' from Mellor 1977"
+
+      variable_names(iiPDF_eta)        = "eta"
+      variable_descriptions(iiPDF_eta) = "Uniform dist of the variable 't' from Mellor 1977"
+
+      variable_names(iiPDF_w)        = "w"
+      variable_descriptions(iiPDF_w) = "Uniform dist of the vertical velocity"
+
+
+      if ( iiPDF_rr > 0 ) then
+        variable_names(iiPDF_rr)        = "rr"
+        variable_descriptions(iiPDF_rr) = "Rain water mixing ratio"
+        variable_units(iiPDF_rr)        = "kg/kg"
+      end if
+      if ( iiPDF_ri > 0 ) then
+        variable_names(iiPDF_ri)        = "ri"
+        variable_descriptions(iiPDF_ri) = "Ice water mixing ratio"
+        variable_units(iiPDF_ri)        = "kg/kg"
+      end if
+      if ( iiPDF_rs > 0 ) then
+        variable_names(iiPDF_rs)        = "rs"
+        variable_descriptions(iiPDF_rs) = "Snow water mixing ratio"
+        variable_units(iiPDF_rs)        = "kg/kg"
+      end if
+      if ( iiPDF_rg > 0 ) then
+        variable_names(iiPDF_rg)        = "rg"
+        variable_descriptions(iiPDF_rg) = "Graupel water mixing ratio"
+        variable_units(iiPDF_rg)        = "kg/kg"
+      end if
+
+      if ( iiPDF_Nr > 0 ) then
+        variable_names(iiPDF_Nr)        = "Nr"
+        variable_descriptions(iiPDF_Nr) = "Rain droplet number concentration"
+        variable_units(iiPDF_Nr)        = "count/kg"
+      end if
+      if ( iiPDF_Ncn > 0 ) then
+        variable_names(iiPDF_Ncn)        = "Ncn"
+        variable_descriptions(iiPDF_Ncn) = "Cloud nuclei concentration (simplified)"
+        variable_units(iiPDF_Ncn)        = "count/kg"
+      end if
+      if ( iiPDF_Ni > 0 ) then
+        variable_names(iiPDF_Ni)        = "Ni"
+        variable_descriptions(iiPDF_Ni) = "Ice number concentration"
+        variable_units(iiPDF_Ni)        = "count/kg"
+      end if
+      if ( iiPDF_Ns > 0 ) then
+        variable_names(iiPDF_Ns)        = "Ns"
+        variable_descriptions(iiPDF_Ns) = "Snow number concentration"
+        variable_units(iiPDF_Ns)        = "count/kg"
+      end if
+      if ( iiPDF_Ng > 0 ) then
+        variable_names(iiPDF_Ng)        = "Ng"
+        variable_descriptions(iiPDF_Ng) = "Graupel number concentration"
+        variable_units(iiPDF_Ng)        = "count/kg"
+      end if
+
+      i = d_variables + 1
+      variable_names(i) = "dp1"
+      variable_descriptions(i) = "Uniform distribution for the mixture component"
+
+      i = d_variables + 2
+      variable_names(i) = "dp2"
+      variable_descriptions(i) = "Uniform variate used to determine precipitation!"
+
+      i = d_variables + 3
+      variable_names(i) = "X_mixt_comp"
+      variable_descriptions(i) = "Mixture component (should be 1 or 2)"
+
+      i = d_variables + 4
+      variable_names(i) = "p_matrix"
+      variable_descriptions(i) = "P matrix elements at k_lh_start"
+
+      i = d_variables + 5
+      variable_names(i) = "lh_sample_point_weights"
+      variable_descriptions(i) = "Weight of each sample point"
+
+      ! Set all the units
+      variable_units(:) = "count" ! Unidata units format for a dimensionless quantity
+
+      call open_2D_samples_file( nz, num_samples, i, & ! In
+                                 trim( fname_prefix )//"_u", fdir, & ! In
+                                 time_initial, stats_tout, stats_zt, & ! In
+                                 variable_names(1:i), variable_descriptions(1:i), & ! In
+                                 variable_units(1:i), & ! In
+                                 uniform_sample_file ) ! In/Out
+
+      deallocate( variable_names, variable_descriptions, variable_units )
+
+    end if
+
+    return
+  end subroutine latin_hypercube_2D_output
+
+!-------------------------------------------------------------------------------
+  subroutine latin_hypercube_2D_close
+! Description:
+!   Close a 2D sample file
+
+! References:
+!   None
+!-------------------------------------------------------------------------------
+    use output_2D_samples_module, only: &
+      close_2D_samples_file ! Procedure
+
+    use output_2D_samples_module, only: &
+      lognormal_sample_file, & ! Variable(s)
+      uniform_sample_file
+
+    implicit none
+
+    ! ---- Begin Code ----
+
+    if ( l_output_2D_lognormal_dist ) then
+      call close_2D_samples_file( lognormal_sample_file )
+    end if
+    if ( l_output_2D_uniform_dist ) then
+      call close_2D_samples_file( uniform_sample_file )
+    end if
+
+    return
+  end subroutine latin_hypercube_2D_close
+
+!-------------------------------------------------------------------------------
+  subroutine choose_X_u_reject &
+             ( l_cloudy_sample, cloud_frac_1, &
+              cloud_frac_2, mixt_frac, &
+              X_u_dp1_element, X_u_chi_element )
+
+! Description:
+!   Find a clear or cloudy point for sampling using the rejection method.
+!
+! References:
+!   None
+!-------------------------------------------------------------------------------
+    use mt95, only: genrand_real3 ! Procedure
+
+    use mt95, only: genrand_real ! Constant
+
+    use constants_clubb, only: &
+      fstderr ! Constant
+
+    use clubb_precision, only: &
+      core_rknd, & ! Variable(s)
+      dp
+
+    implicit none
+
+    ! External
+    intrinsic :: ceiling
+
+    ! Constant parameters
+    real( kind = core_rknd), parameter :: &
+      max_iter_numerator = 100._core_rknd, &
+      cloud_frac_thresh  = 0.001_core_rknd
+
+    ! Input Variables
+    logical, intent(in) :: &
+      l_cloudy_sample ! Whether his is a cloudy or clear air sample point
+
+    real( kind = core_rknd ), intent(in) :: &
+      cloud_frac_1, &    ! Cloud fraction associated with mixture component 1     [-]
+      cloud_frac_2, &    ! Cloud fraction associated with mixture component 2     [-]
+      mixt_frac         ! Mixture fraction                                       [-]
+
+    ! Output Variables
+    real(kind=dp), intent(out) :: &
+      X_u_dp1_element, X_u_chi_element ! Elements from X_u (uniform dist.)
+
+    ! Local Variables
+    real(kind=core_rknd) :: cloud_frac_i
+
+    real(kind=genrand_real) :: rand ! Random number
+
+    ! Maximum iterations searching for the cloudy/clear part of the gridbox
+    integer :: itermax
+
+    integer :: i
+
+!   integer :: X_mixt_comp_one_lev ! Whether we're in the first or second mixture component
+
+    ! ---- Begin code ----
+
+    ! Maximum iterations searching for the cloudy/clear part of the gridbox
+    ! This should't appear in a parameter statement because it's set based on
+    ! a floating-point calculation, and apparently that's not ISO Fortran
+    itermax = ceiling( max_iter_numerator / cloud_frac_thresh )
+
+    ! Find some new random numbers between (0,1)
+    call genrand_real3( rand )
+    X_u_dp1_element      = real(rand, kind = dp)
+    call genrand_real3( rand )
+    X_u_chi_element = real(rand, kind = dp)
+    ! Here we use the rejection method to find a value in either the
+    ! clear or cloudy part of the grid box
+    do i = 1, itermax
+
+      if ( in_mixt_comp_1( X_u_dp1_element, real(mixt_frac, kind = dp) ) ) then
+        ! Component 1
+        cloud_frac_i = cloud_frac_1
+!       X_mixt_comp_one_lev = 1
+      else
+        ! Component 2
+        cloud_frac_i = cloud_frac_2
+!       X_mixt_comp_one_lev = 2
+      end if
+
+      if ( X_u_chi_element >= 1._dp-real(cloud_frac_i, kind = dp) .and. l_cloudy_sample ) then
+        ! If we're looking for the cloudy part of the grid box, then exit this loop
+        exit
+      else if ( X_u_chi_element < ( 1._dp-real(cloud_frac_i, kind = dp) ) &
+                .and. .not. l_cloudy_sample ) then
+        ! If we're looking for the clear part of the grid box, then exit this loop
+        exit
+      else
+        ! To prevent infinite loops we have this check here.
+        ! Theoretically some seed might result in never picking the
+        ! point we want after many iterations, but it's highly unlikely
+        ! given that our current itermax is 100 / cloud_frac_thresh.
+        ! -dschanen 19 March 2010
+        if ( i == itermax ) then
+          write(fstderr,*) "Maximum iteration reached in latin_hypercube driver."
+          stop "Fatal error"
+        else
+          ! Find some new test values within the interval (0,1)
+          call genrand_real3( rand )
+          X_u_dp1_element      = real(rand, kind = dp)
+          call genrand_real3( rand )
+          X_u_chi_element = real(rand, kind = dp)
+        end if
+      end if ! Looking for a clear or cloudy point
+
+    end do ! Loop until we either find what we want or reach itermax
+
+    return
+  end subroutine choose_X_u_reject
+
+!-------------------------------------------------------------------------------
+  subroutine choose_X_u_scaled &
+             ( l_cloudy_sample, &
+               p_matrix_element, num_samples, &
+               cloud_frac_1, cloud_frac_2, &
+               mixt_frac, mixt_rand_element, &
+               X_u_dp1_element, X_u_chi_element )
+
+! Description:
+!   Find a clear or cloudy point for sampling.
+!
+! References:
+!   None
+!-------------------------------------------------------------------------------
+
+    use generate_lh_sample_module, only: &
+      choose_permuted_random    ! Procedure
+
+    use clubb_precision, only: &
+      core_rknd, & ! Variable(s)
+      dp
+
+    implicit none
+
+    ! Input Variables
+    logical, intent(in) :: &
+      l_cloudy_sample ! Whether his is a cloudy or clear air sample point
+
+    integer, intent(in) :: &
+      p_matrix_element, & ! Integer from 0..num_samples for this sample
+      num_samples       ! Total number of calls to the microphysics
+
+    real( kind = core_rknd ), intent(in) :: &
+      cloud_frac_1, &    ! Cloud fraction associated with mixture component 1     [-]
+      cloud_frac_2, &    ! Cloud fraction associated with mixture component 2     [-]
+      mixt_frac         ! Mixture fraction                                       [-]
+
+    real( kind = dp ), intent(in) :: &
+      mixt_rand_element ! Random number (0,1) for determining mixture component
+
+    ! Output Variables
+    real(kind=dp), intent(out) :: &
+      X_u_dp1_element, X_u_chi_element ! Elements from X_u (uniform dist.)
+
+    ! Local Variables
+    real(kind=dp) :: cloud_frac_i, conditional_mixt_frac
+
+    real( kind = dp ) :: &
+      cld_comp1_frac,    &          ! Fraction of points in component 1 and cloud
+      cld_comp2_frac,    &          ! Fraction of points in component 2 and cloud
+      nocld_comp1_frac,  &          ! Fraction of points in component 1 and clear air
+      nocld_comp2_frac              ! Fraction of points in component 2 and clear air
+
+    integer :: X_mixt_comp_one_lev, p_matrix_element_ranged
+
+    real( kind = dp ) :: mixt_rand_element_scaled, mixt_frac_dp, chi_rand_element
+
+    ! ---- Begin code ----
+
+    mixt_frac_dp = real( mixt_frac, kind=dp )
+
+    cld_comp1_frac = real( mixt_frac*cloud_frac_1, kind=dp )
+    cld_comp2_frac = real( (1._core_rknd-mixt_frac)*cloud_frac_2, kind=dp )
+
+    !---------------------------------------------------------------------
+    ! Determine the conditional mixture fraction, given whether we are in
+    ! cloud
+    !---------------------------------------------------------------------
+    if ( l_cloudy_sample ) then
+
+      conditional_mixt_frac = cld_comp1_frac / ( cld_comp1_frac + cld_comp2_frac )
+
+    else ! .not. l_cloudy_sample
+
+      nocld_comp1_frac = mixt_frac_dp - cld_comp1_frac
+      nocld_comp2_frac = (1._dp - mixt_frac_dp) - cld_comp2_frac
+
+      conditional_mixt_frac = nocld_comp1_frac / (nocld_comp1_frac + nocld_comp2_frac)
+
+    end if ! l_cloudy_sample
+
+    !---------------------------------------------------------------------
+    ! Determine mixture component given the conditional mixture fraction
+    !---------------------------------------------------------------------
+    if ( in_mixt_comp_1( mixt_rand_element, conditional_mixt_frac ) ) then
+      X_mixt_comp_one_lev = 1
+    else
+      X_mixt_comp_one_lev = 2
+    end if
+
+    !---------------------------------------------------------------------
+    ! Determine dp1 element given mixture component
+    !---------------------------------------------------------------------
+    if ( X_mixt_comp_one_lev == 1 ) then
+      ! mixt_rand_element is scaled to give real number stratified in (0,1)
+      mixt_rand_element_scaled = mixt_rand_element / conditional_mixt_frac
+      X_u_dp1_element = mixt_rand_element_scaled * mixt_frac_dp
+
+    else if ( X_mixt_comp_one_lev == 2 ) then
+      ! mixt_rand_element is scaled to give real number stratified in (0,1)
+      mixt_rand_element_scaled = (mixt_rand_element - conditional_mixt_frac) / &
+                                   (1._dp - conditional_mixt_frac) 
+      X_u_dp1_element = mixt_rand_element_scaled * (1._dp - mixt_frac_dp) + mixt_frac_dp
+
+    else
+      stop "Should not be here"
+    end if ! X_mixt_comp_one_lev == 1
+
+    !---------------------------------------------------------------------
+    ! Determine chi element given mixture component and l_cloudy_sample
+    !---------------------------------------------------------------------
+    ! Get p_matrix_element in the proper range
+    if ( p_matrix_element >= ( num_samples / 2 ) ) then
+      p_matrix_element_ranged = p_matrix_element - ( num_samples / 2 )
+    else
+      p_matrix_element_ranged = p_matrix_element
+    end if
+    
+    ! Get a stratified number in (0,1) using the element of p_matrix!
+    chi_rand_element = real( choose_permuted_random( num_samples/2, p_matrix_element_ranged ), &
+                              kind=dp )
+
+    ! Determine cloud fraction
+    if ( X_mixt_comp_one_lev == 1 ) then
+      cloud_frac_i = real( cloud_frac_1, kind=dp )
+    else
+      cloud_frac_i = real( cloud_frac_2, kind=dp )
+    end if
+
+    if ( l_cloudy_sample ) then
+      ! Scale and translate sample point to reside in cloud
+      X_u_chi_element = cloud_frac_i * chi_rand_element + &
+                          (1._dp - cloud_frac_i )
+    else
+      ! Scale and translate sample point to reside in clear air (no cloud)
+      X_u_chi_element = (1._dp-cloud_frac_i) * chi_rand_element
+    end if ! l_cloudy_sample
+
+    return
+  end subroutine choose_X_u_scaled
+
+!----------------------------------------------------------------------
+  elemental function in_mixt_comp_1( X_u_dp1_element, frac )
+
+! Description:
+!   Determine if we're in mixture component 1
+
+! References:
+!   None
+!----------------------------------------------------------------------
+
+    use clubb_precision, only: &
+      dp ! Variable(s)
+
+    implicit none
+
+    real(kind=dp), intent(in) :: &
+      X_u_dp1_element, & ! Element of X_u telling us which mixture component we're in
+      frac               ! The mixture fraction
+
+    logical :: in_mixt_comp_1
+
+    ! ---- Begin Code ----
+
+    if ( X_u_dp1_element < frac ) then
+      in_mixt_comp_1 = .true.
+    else
+      in_mixt_comp_1 = .false.
+    end if
+
+    return
+  end function in_mixt_comp_1
+
+!-------------------------------------------------------------------------------
+  elemental function in_precipitation( rnd, precip_frac ) result( l_in_precip )
+
+  ! Description:
+  !   Determines if a sample is in precipitation
+
+  ! References:
+  !   None
+  !-----------------------------------------------------------------------------
+
+    use clubb_precision, only: dp
+
+    implicit none
+
+    ! Input Variables
+    real( kind=dp ), intent(in) :: &
+      rnd, &         ! Random number between 0 and 1
+      precip_frac    ! Precipitation fraction
+
+    ! Output Variable
+    logical :: &
+      l_in_precip    ! Whether the sample is in precipitation
+
+  !-----------------------------------------------------------------------
+
+    !----- Begin Code -----
+
+    if ( rnd < precip_frac ) then
+      l_in_precip = .true.
+    else
+      l_in_precip = .false.
+    end if
+
+    return
+  end function in_precipitation
+!-------------------------------------------------------------------------------
+  subroutine compute_arb_overlap( nz, k_lh_start, &
+                                  vert_corr, &
+                                  X_u_one_var_all_levs )
+! Description:
+!   Re-computes X_u (uniform sample) for a single variate (e.g. chi) using
+!   an arbitrary correlation specified by the input vert_corr variable (which
+!   can vary with height).
+!   This is an improved algorithm that doesn't require us to convert from a
+!   unifrom distribution to a Gaussian distribution and back again.
+
+! References:
+!   None
+!-------------------------------------------------------------------------------
+    use mt95, only: &
+      genrand_real ! Constant
+
+    use mt95, only: &
+      genrand_real3 ! Procedure
+
+    use clubb_precision, only: &
+      dp ! Variable(s)
+
+    implicit none
+
+    ! Parameter Constants
+
+    ! Input Variables
+    integer, intent(in) :: &
+      nz,      & ! Number of vertical levels [-]
+      k_lh_start   ! Starting k level          [-]
+
+    real(kind=dp), dimension(nz), intent(in) :: &
+      vert_corr ! Vertical correlation between k points in range [0,1]   [-]
+
+    ! Output Variables
+    real(kind=dp), dimension(nz), intent(inout) :: &
+      X_u_one_var_all_levs ! Uniform distribution of 1 variate at all levels [-]
+                           ! The value of this variate at k_lh_start should already be populated
+                           ! in this array and will be used to fill in the other levels.
+
+    ! Local Variables
+    real(kind=genrand_real) :: rand ! random number in the range (0,1)
+
+    real(kind=dp) :: min_val, half_width, offset, unbounded_point
+
+    integer :: k, kp1, km1 ! Loop iterators
+
+    ! ---- Begin Code ----
+
+    ! Upwards loop
+    do k = k_lh_start, nz-1
+
+      kp1 = k+1 ! This is the level we're computing
+
+      if ( vert_corr(kp1) < 0._dp .or. vert_corr(kp1) > 1._dp ) then
+        stop "vert_corr(kp1) not between 0 and 1"
+      end if
+
+      half_width = 1.0_dp - vert_corr(kp1)
+      min_val = X_u_one_var_all_levs(k) - half_width
+
+      call genrand_real3( rand ) ! (0,1)
+      offset = 2.0_dp * half_width * real(rand, kind = dp)
+
+      unbounded_point = min_val + offset
+
+      ! If unbounded_point lies outside the range [0,1],
+      ! fold it back so that it is between [0,1]
+      if ( unbounded_point > 1.0_dp ) then
+        X_u_one_var_all_levs(kp1) = 2.0_dp - unbounded_point
+      else if ( unbounded_point < 0.0_dp ) then
+        X_u_one_var_all_levs(kp1) = - unbounded_point
+      else
+        X_u_one_var_all_levs(kp1) = unbounded_point
+      end if
+
+    end do ! k_lh_start..nz-1
+
+    ! Downwards loop
+    do k = k_lh_start, 2, -1
+
+      km1 = k-1 ! This is the level we're computing
+
+      if ( vert_corr(km1) < 0._dp .or. vert_corr(km1) > 1._dp ) then
+        stop "vert_corr(km1) not between 0 and 1"
+      end if
+
+      half_width = 1.0_dp - vert_corr(km1)
+      min_val = X_u_one_var_all_levs(k) - half_width
+
+      call genrand_real3( rand ) ! (0,1)
+      offset = 2.0_dp * half_width * real(rand, kind = dp)
+
+      unbounded_point = min_val + offset
+
+      ! If unbounded_point lies outside the range [0,1],
+      ! fold it back so that it is between [0,1]
+      if ( unbounded_point > 1.0_dp ) then
+        X_u_one_var_all_levs(km1) = 2.0_dp - unbounded_point
+      else if ( unbounded_point < 0.0_dp ) then
+        X_u_one_var_all_levs(km1) = - unbounded_point
+      else
+        X_u_one_var_all_levs(km1) = unbounded_point
+      end if
+
+    end do ! k_lh_start..2 decrementing
+
+    return
+  end subroutine compute_arb_overlap
+
+!-------------------------------------------------------------------------------
+  subroutine assert_half_cloudy_uniform &
+             ( num_samples, cloud_frac_1, &
+               cloud_frac_2, X_mixt_comp_k_lh_start, &
+               X_u_chi_k_lh_start, l_error )
+! Description:
+!   Verify that half the points are in cloud if cloud weighted sampling is
+!   enabled and other conditions are met.
+
+! References:
+!   None.
+!-------------------------------------------------------------------------------
+
+    use constants_clubb, only: &
+      fstderr ! Constant
+
+    use clubb_precision, only: &
+      core_rknd, & ! Variable(s)
+      dp
+
+    implicit none
+
+    ! Input Variables
+    integer, intent(in) :: &
+      num_samples ! Total calls to the microphysics
+
+    real( kind = core_rknd ), intent(in) :: &
+      cloud_frac_1, cloud_frac_2 ! Cloud fraction associatated with component 1 & 2 [-]
+
+    integer, dimension(num_samples), intent(in) :: &
+      X_mixt_comp_k_lh_start ! Mixture components at k_lh_start
+
+    real(kind=dp), dimension(num_samples), intent(in) :: &
+      X_u_chi_k_lh_start   ! Uniform distribution for chi at k_lh_start [-]
+
+    ! Output Variables
+    logical, intent(out) :: &
+      l_error              ! True if the assertion check failed.
+
+    ! Local Variables
+    real(kind = core_rknd) :: cloud_frac_i
+
+    integer :: number_cloudy_samples
+
+    integer :: sample  ! Loop iterator
+
+    ! ---- Begin Code ----
+    l_error = .false.
+
+    number_cloudy_samples = 0
+
+    do sample = 1, num_samples
+      if ( X_mixt_comp_k_lh_start(sample) == 1 ) then
+        cloud_frac_i = cloud_frac_1
+      else
+        cloud_frac_i = cloud_frac_2
+      end if
+      if ( X_u_chi_k_lh_start(sample) >= real(1._core_rknd-cloud_frac_i, kind = dp) ) then
+        number_cloudy_samples = number_cloudy_samples + 1
+      else
+        ! Do nothing, the air is clear
+      end if
+    end do
+    if ( number_cloudy_samples /= ( num_samples / 2 ) ) then
+      write(fstderr,*) "Error, half of all samples aren't in cloud"
+      write(fstderr,*) "X_u chi random = ", &
+        X_u_chi_k_lh_start(:), "X_mixt_comp = ", X_mixt_comp_k_lh_start, &
+        "cloudy samples =", number_cloudy_samples
+      write(fstderr,*) "cloud_frac_1 = ", cloud_frac_1
+      write(fstderr,*) "cloud_frac_2 = ", cloud_frac_2
+      l_error = .true.
+    end if
+
+    return
+  end subroutine assert_half_cloudy_uniform
+
+!-------------------------------------------------------------------------------
+  function compute_vert_corr( nz, delta_zm, Lscale_vert_avg ) result( vert_corr )
+! Description:
+!   This function computes the vertical correlation for arbitrary overlap, using
+!   density weighted 3pt averaged Lscale and the difference in height levels
+!   (delta_zm).
+! References:
+!   None
+!-------------------------------------------------------------------------------
+
+    use clubb_precision, only: &
+      dp, & ! Variable(s)
+      core_rknd
+
+    implicit none
+
+    ! External
+    intrinsic :: exp
+
+    ! Parameter Constants
+    real( kind = dp ), parameter :: &
+      vert_decorr_coef = 0.03_dp ! Empirically defined de-correlation constant [-]
+
+    ! Input Variables
+    integer, intent(in) :: &
+      nz ! Number of vertical levels  [-]
+
+    real( kind = core_rknd ), intent(in), dimension(nz) :: &
+      delta_zm, &     ! Difference between altitudes    [m]
+      Lscale_vert_avg ! Vertically averaged Lscale      [m]
+
+    ! Output Variable
+    real( kind = dp ), dimension(nz) :: &
+      vert_corr ! The vertical correlation      [-]
+
+    ! ---- Begin Code ----
+    vert_corr(1:nz) = exp( -vert_decorr_coef &
+                            * real( delta_zm(1:nz) / Lscale_vert_avg(1:nz), kind=dp ) )
+
+    return
+  end function compute_vert_corr
+
+!-------------------------------------------------------------------------------
+  subroutine stats_accumulate_lh &
+             ( nz, num_samples, d_variables, rho_ds_zt, &
+               lh_sample_point_weights, X_nl_all_levs, &
+               lh_clipped_vars )
+
+! Description:
+!   Clip subcolumns from latin hypercube and create stats for diagnostic
+!   purposes.
+
+! References:
+!   None
+!-------------------------------------------------------------------------------
+
+    use parameters_model, only: hydromet_dim ! Variable
+
+    use grid_class, only: gr
+
+    use stats_variables, only: &
+      l_stats_samp, & ! Variable(s)
+      ilh_rrm, &
+      ilh_Nrm, &
+      ilh_rim, &
+      ilh_Nim, &
+      ilh_rsm, &
+      ilh_Nsm, &
+      ilh_rgm, &
+      ilh_Ngm, &
+      ilh_thlm, &
+      ilh_rcm, &
+      ilh_Ncm, &
+      ilh_Ncnm, &
+      ilh_rvm, &
+      ilh_wm, &
+      ilh_cloud_frac, &
+      ilh_cloud_frac_unweighted, &
+      ilh_chi, &
+      ilh_chip2, &
+      ilh_eta
+
+    use stats_variables, only: &
+      ilh_wp2_zt, &  ! Variable(s)
+      ilh_Nrp2_zt, &
+      ilh_Ncp2_zt, &
+      ilh_Ncnp2_zt, &
+      ilh_rcp2_zt, &
+      ilh_rtp2_zt, &
+      ilh_thlp2_zt, &
+      ilh_rrp2_zt, &
+      ilh_vwp, &
+      ilh_lwp, &
+      stats_lh_zt, &
+      stats_lh_sfc
+
+    use math_utilities, only: &
+      compute_sample_mean, & ! Procedure(s)
+      compute_sample_variance
+
+    use stats_type_utilities, only: &
+      stat_update_var, & ! Procedure(s)
+      stat_update_var_pt
+
+    use array_index, only: &
+      iirrm, & ! Variables
+      iirsm, & 
+      iirim, & 
+      iirgm, & 
+      iiNrm, &
+      iiNsm, &
+      iiNim, &
+      iiNgm
+
+    use corr_varnce_module, only: &
+      iiPDF_chi, & ! Variable(s)
+      iiPDF_eta, &
+      iiPDF_w, &
+      iiPDF_Ncn
+
+    use constants_clubb, only: &
+      zero_threshold    ! Constant(s)
+
+    use clubb_precision, only: & 
+      core_rknd, & ! Variable(s)
+      dp
+
+   use fill_holes, only: &
+     vertical_integral ! Procedure(s)
+
+    implicit none
+
+    ! Input Variables
+    integer, intent(in) :: &
+      d_variables,     & ! Number of variables to sample
+      num_samples,   & ! Number of calls to microphysics per timestep (normally=2)
+      nz                 ! Number of vertical model levels
+
+    real( kind = core_rknd ), intent(in), dimension(nz) :: &
+      rho_ds_zt  ! Dry, static density (thermo. levs.) [kg/m^3]
+
+    real( kind = core_rknd ), intent(in), dimension(num_samples) :: &
+      lh_sample_point_weights
+
+    real( kind = dp ), intent(in), dimension(nz,num_samples,d_variables) :: &
+      X_nl_all_levs ! Sample that is transformed ultimately to normal-lognormal
+
+    type(lh_clipped_variables_type), dimension(nz,num_samples), intent(in) :: &
+      lh_clipped_vars   ! SILHS variables
+
+    ! Local variables
+    real( kind = core_rknd ), dimension(nz,num_samples) :: &
+      rc_all_points,  & ! Cloud water mixing ratio for all levels        [kg/kg]
+      Nc_all_points,  & ! Cloud droplet conc. for all levels              [#/kg]
+      Ncn_all_points, & ! Cloud nuclei conc. for all levs.; Nc=Ncn*H(chi) [#/kg]
+      rv_all_points     ! Vapor mixing ratio for all levels              [kg/kg]
+
+    real( kind = core_rknd ), dimension(nz,num_samples,hydromet_dim) :: &
+      hydromet_all_points ! Hydrometeor species    [units vary]
+
+    real( kind = core_rknd ), dimension(nz,hydromet_dim) :: &
+      lh_hydromet ! Average value of the latin hypercube est. of all hydrometeors [units vary]
+
+    real( kind = core_rknd ), dimension(nz) :: &
+      lh_thlm,       & ! Average value of the latin hypercube est. of theta_l           [K]
+      lh_rcm,        & ! Average value of the latin hypercube est. of rc                [kg/kg]
+      lh_Ncm,        & ! Average value of the latin hypercube est. of Nc                [num/kg]
+      lh_Ncnm,       & ! Average value of the latin hypercube est. of Ncn               [num/kg]
+      lh_rvm,        & ! Average value of the latin hypercube est. of rv                [kg/kg]
+      lh_wm,         & ! Average value of the latin hypercube est. of vertical velocity [m/s]
+      lh_wp2_zt,     & ! Average value of the variance of the LH est. of vert. vel.     [m^2/s^2]
+      lh_rrp2_zt, & ! Average value of the variance of the LH est. of rr.         [(kg/kg)^2]
+      lh_rcp2_zt,    & ! Average value of the variance of the LH est. of rc.            [(kg/kg)^2]
+      lh_rtp2_zt,    & ! Average value of the variance of the LH est. of rt             [kg^2/kg^2]
+      lh_thlp2_zt,   & ! Average value of the variance of the LH est. of thetal         [K^2]
+      lh_Nrp2_zt,    & ! Average value of the variance of the LH est. of Nr.            [#^2/kg^2]
+      lh_Ncp2_zt,    & ! Average value of the variance of the LH est. of Nc.            [#^2/kg^2]
+      lh_Ncnp2_zt,   & ! Average value of the variance of the LH est. of Ncn.           [#^2/kg^2]
+      lh_cloud_frac, & ! Average value of the latin hypercube est. of cloud fraction    [-]
+      lh_chi,   & ! Average value of the latin hypercube est. of Mellor's s        [kg/kg]
+      lh_eta,   & ! Average value of the latin hypercube est. of Mellor's t        [kg/kg]
+      lh_chip2           ! Average value of the variance of the LH est. of chi       [kg/kg]
+
+
+    real(kind=core_rknd) :: xtmp
+
+    integer :: sample, ivar
+
+    ! ---- Begin Code ----
+
+    rc_all_points = lh_clipped_vars%rc
+
+    if ( l_stats_samp ) then
+
+      ! For all cases where l_lh_cloud_weighted_sampling is false, the weights
+      ! will be 1 (all points equally weighted)
+
+      if ( ilh_rcm + ilh_rcp2_zt + ilh_lwp > 0 ) then
+        lh_rcm = compute_sample_mean( nz, num_samples, lh_sample_point_weights, &
+                                      rc_all_points )
+        call stat_update_var( ilh_rcm, lh_rcm, stats_lh_zt )
+
+        if ( ilh_lwp > 0 ) then
+          xtmp &
+          = vertical_integral &
+               ( (gr%nz - 2 + 1), rho_ds_zt(2:gr%nz), &
+                 lh_rcm(2:gr%nz), gr%invrs_dzt(2:gr%nz) )
+
+          call stat_update_var_pt( ilh_lwp, 1, xtmp, stats_lh_sfc )
+        end if
+      end if
+
+      if ( ilh_thlm + ilh_thlp2_zt > 0 ) then
+        lh_thlm = compute_sample_mean( nz, num_samples, lh_sample_point_weights, &
+                                       real( lh_clipped_vars%thl, kind = core_rknd ) )
+        call stat_update_var( ilh_thlm, lh_thlm, stats_lh_zt )
+      end if
+
+      if ( ilh_rvm + ilh_rtp2_zt > 0 ) then
+        rv_all_points = lh_clipped_vars(:,:)%rv
+        lh_rvm = compute_sample_mean( nz, num_samples, lh_sample_point_weights, &
+                                      rv_all_points )
+        call stat_update_var( ilh_rvm, lh_rvm, stats_lh_zt )
+        if ( ilh_vwp > 0 ) then
+          xtmp &
+          = vertical_integral &
+               ( (gr%nz - 2 + 1), rho_ds_zt(2:gr%nz), &
+                 lh_rvm(2:gr%nz), gr%invrs_dzt(2:gr%nz) )
+
+          call stat_update_var_pt( ilh_vwp, 1, xtmp, stats_lh_sfc )
+        end if
+      end if
+
+      if ( ilh_wm + ilh_wp2_zt > 0 ) then
+        lh_wm  = compute_sample_mean( nz, num_samples, lh_sample_point_weights, &
+                                      real( X_nl_all_levs(:,:,iiPDF_w), kind = core_rknd) )
+        call stat_update_var( ilh_wm, lh_wm, stats_lh_zt )
+      end if
+
+      if ( ilh_rrm + ilh_Nrm + ilh_rim + ilh_Nim + ilh_rsm + ilh_Nsm + &
+           ilh_rgm + ilh_Ngm + ilh_Ncnm + ilh_Ncm > 0 ) then
+
+        lh_hydromet = 0._core_rknd
+        call copy_X_nl_into_hydromet_all_pts( nz, d_variables, num_samples, & ! In
+                                      X_nl_all_levs, &  ! In
+                                      lh_hydromet, & ! In
+                                      hydromet_all_points, &  ! Out
+                                      Ncn_all_points ) ! Out
+
+        Nc_all_points = lh_clipped_vars%Nc
+
+        ! Get rid of an annoying compiler warning.
+        ivar = 1
+        ivar = ivar
+
+        forall ( ivar = 1:hydromet_dim )
+          lh_hydromet(:,ivar) = compute_sample_mean( nz, num_samples, lh_sample_point_weights,&
+                                                     hydromet_all_points(:,:,ivar) )
+        end forall ! 1..hydromet_dim
+
+      end if
+
+      if ( ilh_Ncnm > 0 ) then
+        lh_Ncnm = compute_sample_mean( nz, num_samples, lh_sample_point_weights, &
+                                       Ncn_all_points(:,:) )
+        call stat_update_var( ilh_Ncnm, lh_Ncnm, stats_lh_zt )
+      end if
+
+      if ( ilh_Ncm > 0 ) then
+        lh_Ncm = compute_sample_mean( nz, num_samples, lh_sample_point_weights, &
+                                      Nc_all_points(:,:) )
+        call stat_update_var( ilh_Ncm, lh_Ncm, stats_lh_zt )
+      end if
+
+      ! Latin hypercube estimate of cloud fraction
+      if ( ilh_cloud_frac > 0 ) then
+        lh_cloud_frac(:) = 0._core_rknd
+        do sample = 1, num_samples
+          where ( X_nl_all_levs(:,sample,iiPDF_chi) > 0._dp )
+            lh_cloud_frac(:) = lh_cloud_frac(:) + 1.0_core_rknd * lh_sample_point_weights(sample)
+          end where
+        end do
+        lh_cloud_frac(:) = lh_cloud_frac(:) / real( num_samples, kind = core_rknd )
+
+        call stat_update_var( ilh_cloud_frac, lh_cloud_frac, stats_lh_zt )
+      end if
+
+      ! Sample of lh_cloud_frac that is not weighted
+      if ( ilh_cloud_frac_unweighted > 0 ) then
+        lh_cloud_frac(:) = 0._core_rknd
+        do sample = 1, num_samples
+          where ( X_nl_all_levs(:,sample,iiPDF_chi) > 0._dp )
+            lh_cloud_frac(:) = lh_cloud_frac(:) + 1.0_core_rknd
+          end where
+        end do
+        lh_cloud_frac(:) = lh_cloud_frac(:) / real( num_samples, kind = core_rknd )
+
+        call stat_update_var( ilh_cloud_frac_unweighted, lh_cloud_frac, stats_lh_zt )
+      end if
+
+      ! Latin hypercube estimate of chi
+      if ( ilh_chi > 0 ) then
+        lh_chi(1:nz) &
+        = compute_sample_mean( nz, num_samples, lh_sample_point_weights, &
+                               real( X_nl_all_levs(1:nz, 1:num_samples, iiPDF_chi), &
+                                     kind = core_rknd ) )
+        call stat_update_var( ilh_chi, lh_chi, stats_lh_zt )
+      end if
+
+      ! Latin hypercube estimate of variance of chi
+      if ( ilh_chip2 > 0 ) then
+        lh_chip2(1:nz) &
+        = compute_sample_variance( nz, num_samples, &
+                                   real( X_nl_all_levs(:,:,iiPDF_chi), kind = core_rknd ), &
+                                   lh_sample_point_weights, lh_chi(1:nz) )
+        call stat_update_var( ilh_chip2, lh_chip2, stats_lh_zt )
+      end if
+
+      ! Latin hypercube estimate of eta
+      if ( ilh_eta > 0 ) then
+        lh_eta(1:nz) &
+        = compute_sample_mean( nz, num_samples, lh_sample_point_weights, &
+                               real( X_nl_all_levs(1:nz, 1:num_samples, iiPDF_eta), &
+                                     kind = core_rknd ) )
+        call stat_update_var( ilh_eta, lh_eta, stats_lh_zt )
+      end if
+
+      if ( ilh_wp2_zt > 0 ) then
+        ! Compute the variance of vertical velocity
+        lh_wp2_zt = compute_sample_variance( nz, num_samples, &
+                                             real( X_nl_all_levs(:,:,iiPDF_w), kind = core_rknd ), &
+                                             lh_sample_point_weights, lh_wm )
+        call stat_update_var( ilh_wp2_zt, lh_wp2_zt, stats_lh_zt )
+      end if
+
+      if ( ilh_rcp2_zt  > 0 ) then
+        ! Compute the variance of cloud water mixing ratio
+        lh_rcp2_zt = compute_sample_variance &
+                     ( nz, num_samples, rc_all_points, &
+                       lh_sample_point_weights, lh_rcm )
+        call stat_update_var( ilh_rcp2_zt, lh_rcp2_zt, stats_lh_zt )
+      end if
+
+      if ( ilh_rtp2_zt > 0 ) then
+        ! Compute the variance of total water
+        lh_rtp2_zt = compute_sample_variance &
+                     ( nz, num_samples, &
+                       real( lh_clipped_vars%rt, kind = core_rknd ), lh_sample_point_weights, &
+                       lh_rvm+lh_rcm )
+        call stat_update_var( ilh_rtp2_zt, lh_rtp2_zt, stats_lh_zt )
+      end if
+
+      if ( ilh_thlp2_zt > 0 ) then
+        ! Compute the variance of liquid potential temperature
+        lh_thlp2_zt = compute_sample_variance( nz, num_samples, &
+                        real( lh_clipped_vars%thl, kind = core_rknd ), lh_sample_point_weights, &
+                        lh_thlm )
+        call stat_update_var( ilh_thlp2_zt, lh_thlp2_zt, stats_lh_zt )
+      end if
+
+      ! Compute the variance of rain water mixing ratio
+      if ( iirrm > 0 .and. ilh_rrp2_zt > 0 ) then
+        lh_rrp2_zt = compute_sample_variance &
+                        ( nz, num_samples, hydromet_all_points(:,:,iirrm), &
+                          lh_sample_point_weights, lh_hydromet(:,iirrm) )
+        call stat_update_var( ilh_rrp2_zt, lh_rrp2_zt, stats_lh_zt )
+      end if
+
+      ! Compute the variance of cloud nuclei concentration (simplifed)
+      if ( iiPDF_Ncn > 0 .and. ilh_Ncnp2_zt > 0 ) then
+        lh_Ncnp2_zt = compute_sample_variance &
+                      ( nz, num_samples, Ncn_all_points(:,:), &
+                        lh_sample_point_weights, lh_Ncnm(:) )
+        call stat_update_var( ilh_Ncnp2_zt, lh_Ncnp2_zt, stats_lh_zt )
+      end if
+
+      ! Compute the variance of cloud droplet concentration
+      if ( ilh_Ncp2_zt > 0 ) then
+        lh_Ncp2_zt = compute_sample_variance &
+                     ( nz, num_samples, Nc_all_points(:,:), &
+                       lh_sample_point_weights, lh_Ncm(:) )
+        call stat_update_var( ilh_Ncp2_zt, lh_Ncp2_zt, stats_lh_zt )
+      end if
+
+      ! Compute the variance of rain droplet number concentration
+      if ( iiNrm > 0 .and. ilh_Nrp2_zt > 0 ) then
+        lh_Nrp2_zt = compute_sample_variance( nz, num_samples, hydromet_all_points(:,:,iiNrm),&
+                                              lh_sample_point_weights, lh_hydromet(:,iiNrm) )
+        call stat_update_var( ilh_Nrp2_zt, lh_Nrp2_zt, stats_lh_zt )
+      end if
+
+      ! Averages of points being fed into the microphysics
+      ! These are for diagnostic purposes, and are not needed for anything
+      if ( iirrm > 0 ) then
+        call stat_update_var( ilh_rrm, lh_hydromet(:,iirrm), stats_lh_zt )
+      end if
+      if ( iiNrm > 0 ) then
+        call stat_update_var( ilh_Nrm, lh_hydromet(:,iiNrm), stats_lh_zt )
+      end if
+      if ( iirim > 0 ) then
+        call stat_update_var( ilh_rim, lh_hydromet(:,iirim), stats_lh_zt )
+      end if
+      if ( iiNim > 0 ) then
+        call stat_update_var( ilh_Nim, lh_hydromet(:,iiNim), stats_lh_zt )
+      end if
+      if ( iirsm > 0 ) then
+        call stat_update_var( ilh_rsm, lh_hydromet(:,iirsm), stats_lh_zt )
+      end if
+      if ( iiNsm > 0 ) then
+        call stat_update_var( ilh_Nsm, lh_hydromet(:,iiNsm), stats_lh_zt )
+      end if
+      if ( iirgm > 0 ) then
+        call stat_update_var( ilh_rgm, lh_hydromet(:,iirgm), stats_lh_zt )
+      end if
+      if ( iiNgm > 0 ) then
+        call stat_update_var( ilh_Ngm, lh_hydromet(:,iiNgm), stats_lh_zt )
+      end if
+
+    end if ! l_stats_samp
+
+    return
+  end subroutine stats_accumulate_lh
+
+  !-----------------------------------------------------------------------
+  subroutine stats_accumulate_uniform_lh( nz, num_samples, l_in_precip_all_levs, &
+                                          X_mixt_comp_all_levs, &
+                                          lh_sample_point_weights, k_lh_start )
+
+  ! Description:
+  !   Samples statistics that cannot be deduced from the normal-lognormal
+  !   SILHS sample (X_nl_all_levs)
+
+  ! References:
+  !   None
+  !-----------------------------------------------------------------------
+
+    use clubb_precision, only: &
+      core_rknd            ! Constant
+
+    use stats_type_utilities, only: &
+      stat_update_var,   & ! Procedure(s)
+      stat_update_var_pt
+
+    use stats_variables, only: &
+      l_stats_samp, &      ! Variable(s)
+      ilh_precip_frac, &
+      ilh_mixt_frac, &
+      ilh_precip_frac_unweighted, &
+      ilh_mixt_frac_unweighted, &
+      ik_lh_start, &
+      stats_lh_zt, &
+      stats_lh_sfc
+
+    use math_utilities, only: &
+      compute_sample_mean ! Procedure
+
+    use constants_clubb, only: &
+      one                 ! Constant
+
+    implicit none
+
+    ! Input Variables
+    integer, intent(in) :: &
+      nz, &         ! Number of vertical levels
+      num_samples ! Number of SILHS sample points
+
+    logical, dimension(nz,num_samples), intent(in) :: &
+      l_in_precip_all_levs ! Boolean variables indicating whether a sample is in
+                           ! precipitation at a given height level
+
+    integer, dimension(nz,num_samples), intent(in) :: &
+      X_mixt_comp_all_levs ! Integers indicating which mixture component a
+                           ! sample is in at a given height level
+    
+    real( kind = core_rknd ), dimension(num_samples), intent(in) :: &
+      lh_sample_point_weights ! The weight of each sample
+
+    integer, intent(in) :: &
+      k_lh_start           ! Vertical level for sampling preferentially within       [-]
+                           ! cloud
+
+    ! Local Variables
+    real( kind = core_rknd ), dimension(nz) :: &
+      lh_precip_frac, &
+      lh_mixt_frac
+
+    real( kind = core_rknd ), dimension(nz,num_samples) :: &
+      int_in_precip, & ! '1' for samples in precipitation, '0' otherwise
+      int_mixt_comp    ! '1' for samples in the first PDF component, '0' otherwise
+
+    real( kind = core_rknd ), dimension(num_samples) :: &
+      one_weights
+
+  !-----------------------------------------------------------------------
+
+    !----- Begin Code -----
+    if ( l_stats_samp ) then
+      ! Estimate of lh_precip_frac
+      if ( ilh_precip_frac > 0 ) then
+        where ( l_in_precip_all_levs )
+          int_in_precip = 1.0_core_rknd
+        else where
+          int_in_precip = 0.0_core_rknd
+        end where
+        lh_precip_frac(:) = compute_sample_mean( nz, num_samples, lh_sample_point_weights, &
+                                                 int_in_precip )
+        call stat_update_var( ilh_precip_frac, lh_precip_frac, stats_lh_zt )
+      end if
+
+      ! Unweighted estimate of lh_precip_frac
+      if ( ilh_precip_frac_unweighted > 0 ) then
+        where ( l_in_precip_all_levs )
+          int_in_precip = 1.0_core_rknd
+        else where
+          int_in_precip = 0.0_core_rknd
+        end where
+        one_weights = one
+        lh_precip_frac(:) = compute_sample_mean( nz, num_samples, one_weights, &
+                                                 int_in_precip )
+        call stat_update_var( ilh_precip_frac_unweighted, lh_precip_frac, stats_lh_zt )
+      end if
+
+      ! Estimate of lh_mixt_frac
+      if ( ilh_mixt_frac > 0 ) then
+        where ( X_mixt_comp_all_levs == 1 )
+          int_mixt_comp = 1.0_core_rknd
+        else where
+          int_mixt_comp = 0.0_core_rknd
+        end where
+        lh_mixt_frac(:) = compute_sample_mean( nz, num_samples, lh_sample_point_weights, &
+                                               int_mixt_comp )
+        call stat_update_var( ilh_mixt_frac, lh_mixt_frac, stats_lh_zt )
+      end if
+
+      ! Unweighted estimate of lh_mixt_frac
+      if ( ilh_mixt_frac_unweighted > 0 ) then
+        where ( X_mixt_comp_all_levs == 1 )
+          int_mixt_comp = 1.0_core_rknd
+        else where
+          int_mixt_comp = 0.0_core_rknd
+        end where
+        one_weights = one
+        lh_mixt_frac(:) = compute_sample_mean( nz, num_samples, one_weights, &
+                                               int_mixt_comp )
+        call stat_update_var( ilh_mixt_frac_unweighted, lh_mixt_frac, stats_lh_zt )
+      end if
+
+      ! k_lh_start is an integer, so it would be more appropriate to sample it
+      ! as an integer, but as far as I can tell our current sampling
+      ! infrastructure mainly supports sampling real numbers.
+      call stat_update_var_pt( ik_lh_start, 1, real( k_lh_start, kind=core_rknd ), stats_lh_sfc )
+
+    end if ! l_stats_samp
+
+    return
+  end subroutine stats_accumulate_uniform_lh
+
+  !-----------------------------------------------------------------------------
+  subroutine copy_X_nl_into_hydromet_all_pts( nz, d_variables, num_samples, &
+                                      X_nl_all_levs, &
+                                      hydromet, &
+                                      hydromet_all_points, &
+                                      Ncn_all_points )
+
+  ! Description:
+  !   Copy the points from the latin hypercube sample to an array with just the
+  !   hydrometeors
+  ! References:
+  !   None
+  !-----------------------------------------------------------------------------
+    use parameters_model, only: &
+      hydromet_dim ! Variable
+
+    use array_index, only: &
+      iirrm, & ! Variables
+      iirsm, & 
+      iirim, & 
+      iirgm, & 
+      iiNrm, &
+      iiNsm, &
+      iiNim, &
+      iiNgm
+
+    use corr_varnce_module, only: &
+      iiPDF_rr, &
+      iiPDF_rs, &
+      iiPDF_ri, &
+      iiPDF_rg, &
+      iiPDF_Nr, &
+      iiPDF_Ns, &
+      iiPDF_Ng, &
+      iiPDF_Ncn, &
+      iiPDF_Ni
+
+    use clubb_precision, only: &
+      dp, & ! double precision
+      core_rknd
+
+    implicit none
+
+    integer, intent(in) :: &
+      nz,            & ! Number of vertical levels
+      d_variables,   & ! Number of variates
+      num_samples    ! Number of calls to microphysics
+
+    real( kind = dp ), dimension(nz,num_samples,d_variables), intent(in) :: &
+      X_nl_all_levs ! Sample that is transformed ultimately to normal-lognormal
+
+    real( kind = core_rknd ), dimension(nz,hydromet_dim), intent(in) :: &
+      hydromet ! Hydrometeor species    [units vary]
+
+    real( kind = core_rknd ), dimension(nz,num_samples,hydromet_dim), intent(out) :: &
+      hydromet_all_points ! Hydrometeor species    [units vary]
+
+    real( kind = core_rknd ), dimension(nz,num_samples), intent(out) :: &
+      Ncn_all_points    ! Cloud nuclei conc. (simplified); Nc=Ncn*H(chi)  [#/kg]
+
+    integer :: sample, ivar
+
+    do sample = 1, num_samples
+      ! Copy the sample points into the temporary arrays
+      do ivar = 1, hydromet_dim, 1
+        if ( ivar == iirrm .and. iiPDF_rr > 0 ) then
+          ! Use a sampled value of rain water mixing ratio
+          hydromet_all_points(:,sample,ivar) = &
+            real( X_nl_all_levs(:,sample,iiPDF_rr), kind = core_rknd )
+
+        else if ( ivar == iirsm .and. iiPDF_rs > 0 ) then
+          ! Use a sampled value of rain water mixing ratio
+          hydromet_all_points(:,sample,ivar) = &
+            real( X_nl_all_levs(:,sample,iiPDF_rs), kind = core_rknd )
+
+        else if ( ivar == iirim .and. iiPDF_ri > 0 ) then
+          ! Use a sampled value of rain water mixing ratio
+          hydromet_all_points(:,sample,ivar) = &
+            real( X_nl_all_levs(:,sample,iiPDF_ri), kind = core_rknd )
+
+        else if ( ivar == iirgm .and. iiPDF_rg > 0 ) then
+          ! Use a sampled value of rain water mixing ratio
+          hydromet_all_points(:,sample,ivar) = &
+            real( X_nl_all_levs(:,sample,iiPDF_rg), kind = core_rknd )
+
+        else if ( ivar == iiNrm .and. iiPDF_Nr > 0 ) then
+          ! Use a sampled value of rain droplet number concentration
+          hydromet_all_points(:,sample,ivar) = &
+            real( X_nl_all_levs(:,sample,iiPDF_Nr), kind = core_rknd )
+
+        else if ( ivar == iiNsm .and. iiPDF_Ns > 0 ) then
+          ! Use a sampled value of rain droplet number concentration
+          hydromet_all_points(:,sample,ivar) = &
+            real( X_nl_all_levs(:,sample,iiPDF_Ns), kind = core_rknd )
+
+        else if ( ivar == iiNgm .and. iiPDF_Ng > 0 ) then
+          ! Use a sampled value of rain droplet number concentration
+          hydromet_all_points(:,sample,ivar) = &
+            real( X_nl_all_levs(:,sample,iiPDF_Ng), kind = core_rknd )
+
+        else if ( ivar == iiNim .and. iiPDF_Ni > 0 ) then
+          ! Use a sampled value of rain droplet number concentration
+          hydromet_all_points(:,sample,ivar) = &
+            real( X_nl_all_levs(:,sample,iiPDF_Ni), kind = core_rknd )
+
+        else ! Use the mean field, rather than a sample point
+          ! This is the case for hail and graupel in the Morrison microphysics
+          ! currently -dschanen 23 March 2010
+          hydromet_all_points(:,sample,ivar) = hydromet(:,ivar)
+
+        end if
+      end do ! 1..hydromet_dim
+      ! Copy Ncn into Ncn all points
+      if ( iiPDF_Ncn > 0 ) then
+        Ncn_all_points(:,sample) = &
+          real( X_nl_all_levs(:,sample,iiPDF_Ncn), kind=core_rknd )
+      end if
+    end do ! 1..num_samples
+
+    return
+  end subroutine copy_X_nl_into_hydromet_all_pts
+  !-----------------------------------------------------------------------------
+
+  !-----------------------------------------------------------------------
+  elemental function Ncn_to_Nc( Ncn, chi ) result ( Nc )
+
+  ! Description:
+  !   Converts a sample of Ncn to a sample of Nc, where
+  !   Nc = Ncn * H(chi)
+  !   and H(x) is the Heaviside step function.
+
+  ! References:
+  !   None
+  !-----------------------------------------------------------------------
+
+    ! Included Modules
+    use clubb_precision, only: &
+      core_rknd    ! Our awesome generalized precision (constant)
+
+    use constants_clubb, only: &
+      zero         ! Constant
+
+    implicit none
+
+    ! Input Variables
+    real( kind = core_rknd ), intent(in) :: &
+      Ncn,  &  ! Simplified cloud nuclei concentration N_cn  [num/kg]
+      chi      ! Extended cloud water mixing ratio           [kg/kg]
+
+    ! Output Variable
+    real( kind = core_rknd ) :: &
+      Nc       ! Cloud droplet concentration                 [num/kg]
+
+  !-----------------------------------------------------------------------
+
+    !----- Begin Code -----
+
+    if ( chi > zero ) then
+      Nc = Ncn
+    else
+      Nc = zero
+    end if
+
+    return
+  end function Ncn_to_Nc
+  !-----------------------------------------------------------------------
+
+  !-----------------------------------------------------------------------
+  elemental function chi_to_rc( chi ) result ( rc )
+
+  ! Description:
+  !   Converts a sample of chi to a sample of rc, where
+  !   rc = chi * H(chi)
+  !   and H(x) is the Heaviside step function.
+
+  ! References:
+  !   None
+  !-----------------------------------------------------------------------
+
+    ! Included Modules
+    use clubb_precision, only: &
+      core_rknd    ! Our awesome generalized precision (constant)
+
+    use constants_clubb, only: &
+      zero         ! Constant
+
+    implicit none
+
+    ! Input Variable
+    real( kind = core_rknd ), intent(in) :: &
+      chi      ! Extended cloud water mixing ratio           [kg/kg]
+
+    ! Output Variable
+    real( kind = core_rknd ) :: &
+      rc       ! Cloud water mixing ratio                    [kg/kg]
+
+  !-----------------------------------------------------------------------
+
+    !----- Begin Code -----
+
+    if ( chi > zero ) then
+      rc = chi
+    else
+      rc = zero
+    end if
+
+    return
+  end function chi_to_rc
+  !-----------------------------------------------------------------------
+
+
+#endif /* SILHS */
+
+end module latin_hypercube_driver_module

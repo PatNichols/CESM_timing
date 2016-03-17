@@ -1,0 +1,6 @@
+create_test -testname ERS_PT.f19_g16.F1850CNCHM -mach yellowstone -compiler intel
+
+test created with the following options:
+case: ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741 casebaseid: ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel compiler: intel compset: F1850CNCHM confopts: _PT fullname: ERS_PT grid: f19_g16 mach: yellowstone status: SFAIL test_argv: -testname ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel -testroot /glade/p/work/pnichols/cesm1_5_alpha04c/cime/scripts  testname: ERS 
+
+create_newcase -loglevel INFO -case /glade/p/work/pnichols/cesm1_5_alpha04c/cime/scripts/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741 -res f19_g16 -mach yellowstone -compset F1850CNCHM -testname ERS -confopts _PT -mach_dir /glade/p/work/pnichols/cesm1_5_alpha04c/cime/cime_config/cesm/machines -compiler intel

@@ -1,0 +1,496 @@
+<?xml version="1.0"?> 
+
+<config_definition> 
+
+<header>
+
+    These variables SHOULD NOT be changed once the model has been built.
+    urrently, these variables are not cached.
+    Note1: users SHOULD NOT modify BUILD_COMPETE below
+    this is done automatically by the scripts.
+    </header> 
+
+<groups>
+   <group>build_component_cam</group> 
+   <group>build_component_cice</group> 
+   <group>build_component_clm</group> 
+   <group>build_component_rtm</group> 
+   <group>build_def</group> 
+   <group>build_derived</group> 
+   <group>build_grid</group> 
+   <group>build_macros</group> 
+   <group>build_status</group> 
+</groups>
+
+
+  <entry id="CAM_CONFIG_OPTS"  value="-phys cam4 -chem super_fast_llnl">
+    <type>char</type> 
+    <group>build_component_cam</group> 
+    <desc>CAM configure options, see CAM configure utility for details
+      Provides option(s) for the CAM configure utility. 
+      CAM_CONFIG_OPTS are normally set as compset variables (e.g., -phys  cam3_5_1 -chem waccm_mozart) 
+      and in general should not be modified for supported compsets.  It is recommended that if you want 
+      to modify this value for your experiment, you should use your own user-defined
+      component sets via using create_newcase with a compset_file argument</desc> 
+  </entry> 
+
+  <entry id="CAM_DYCORE"  value="fv">
+    <type>char</type> 
+    <valid_values>eul,fv,se</valid_values> 
+    <group>build_component_cam</group> 
+    <desc>CAM dynamical core</desc> 
+  </entry> 
+
+  <entry id="CICE_AUTO_DECOMP"  value="true">
+    <type>logical</type> 
+    <valid_values>true,false</valid_values> 
+    <group>build_component_cice</group> 
+    <desc>This is for experts only - if CICE_AUTO_DECOMP is set to false, then
+      can manually set the values of CICE_BLCKX, CICE_BLCKY, CICE_MXBLCKS, 
+      CICE_DECOMPTYPE, and CICE_DECOMPSETTING".</desc> 
+  </entry> 
+
+  <entry id="CICE_BLCKX"  value="8">
+    <type>integer</type> 
+    <group>build_component_cice</group> 
+    <desc>Size of cice block in first horiz dimension 
+      (DO NOT EDIT if CICE_AUTO_DECOMP is true). 
+      This is for experts only - automatically set if CICE_AUTO_DECOMP 
+      is true to set this value, must first set CICE_AUTO_DECOMP to false.</desc> 
+  </entry> 
+
+  <entry id="CICE_BLCKY"  value="8">
+    <type>integer</type> 
+    <group>build_component_cice</group> 
+    <desc>Size of cice block in second horiz dimension 
+      (DO NOT EDIT if CICE_AUTO_DECOMP is true).
+      This is for experts only - automatically set if CICE_AUTO_DECOMP is true,
+      to set this value, must first set CICE_AUTO_DECOMP to false.</desc> 
+  </entry> 
+
+  <entry id="CICE_CONFIG_OPTS"  value=" -phys cice5 ">
+    <type>char</type> 
+    <group>build_component_cice</group> 
+    <desc>CICE configure options, see CICE configure utility for details.
+      Provides option(s) for the CLM configure utility.
+      CICE_CONFIG_OPTS are normally set as compset variables (e.g., -ntr_aero 3)
+      and in general should not be modified for supported compsets.  
+      It is recommended that if you want to modify this value for your experiment, 
+      you should use your own user-defined component sets via using create_newcase 
+      with a compset_file argument. 
+      This is an advanced flag and should only be used by expert users.</desc> 
+  </entry> 
+
+  <entry id="CICE_CPPDEFS"  value="  -DCCSMCOUPLED -Dncdf -DNUMIN=11 -DNUMAX=99 -DNICECAT=1 -DNXGLOB=320 -DNYGLOB=384 -DNTRAERO=0 -DNBGCLYR=0 -DNICELYR=4 -DNSNWLYR=1 -DTRAGE=1 -DTRFY=1 -DTRLVL=1 -DTRPND=1 -DTRBRI=0 -DTRBGCS=0 -DBLCKX=8 -DBLCKY=8 -DMXBLCKS=12">
+    <type>char</type> 
+    <group>build_component_cice</group> 
+    <desc>CICE cpp definitions (setup automatically - DO NOT EDIT)</desc> 
+  </entry> 
+
+  <entry id="CICE_DECOMPSETTING"  value="null">
+    <type>char</type> 
+    <group>build_component_cice</group> 
+    <desc>cice decomp setting for decomp type (do not edit if CICE_AUTO_DECOMP is true)
+      This is for experts only - automatically set if CICE_AUTO_DECOMP is true,
+      to set this value, must first set CICE_AUTO_DECOMP to false.</desc> 
+  </entry> 
+
+  <entry id="CICE_DECOMPTYPE"  value="sectrobin">
+    <type>char</type> 
+    <group>build_component_cice</group> 
+    <desc>cice block distribution type (do not edit if CICE_AUTO_DECOMP is true)
+      This is for experts only - automatically set if CICE_AUTO_DECOMP is true,
+      to set this value, must first set CICE_AUTO_DECOMP to false.</desc> 
+  </entry> 
+
+  <entry id="CICE_MODE"  value="prescribed">
+    <type>char</type> 
+    <valid_values>prognostic,prescribed,thermo_only</valid_values> 
+    <group>build_component_cice</group> 
+    <desc>Option to the CICE configure utility for the -mode argument (default is prognostic)</desc> 
+  </entry> 
+
+  <entry id="CICE_MXBLCKS"  value="12">
+    <type>integer</type> 
+    <group>build_component_cice</group> 
+    <desc>Max number of cice blocks per processor (do not edit if CICE_AUTO_DECOMP is true)
+      This is for experts only - automatically set if CICE_AUTO_DECOMP is true,
+      to set this value, must first set CICE_AUTO_DECOMP to false.</desc> 
+  </entry> 
+
+  <entry id="CLM_CONFIG_OPTS"  value="-phys clm4_0 -bgc cn">
+    <type>char</type> 
+    <group>build_component_clm</group> 
+    <desc>Provides option(s) for the CLM configure utility.
+      CLM_CONFIG_OPTS are normally set as compset variables (e.g., -bgc cn)
+      and in general should not be modified for supported compsets.  
+      It is recommended that if you want to modify this value for your experiment, 
+      you should use your own user-defined component sets via using create_newcase 
+      with a compset_file argument. 
+      This is an advanced flag and should only be used by expert users.</desc> 
+  </entry> 
+
+  <entry id="RTM_FLOOD_MODE"  value="NULL">
+    <type>char</type> 
+    <valid_values>ACTIVE,NULL</valid_values> 
+    <group>build_component_rtm</group> 
+    <desc>mode for rtm flood feature, NULL means rtm flood is turned off</desc> 
+  </entry> 
+
+  <entry id="RTM_MODE"  value="ACTIVE">
+    <type>char</type> 
+    <valid_values>ACTIVE,NULL</valid_values> 
+    <group>build_component_rtm</group> 
+    <desc>mode for rtm model, NULL means rtm is turned off</desc> 
+  </entry> 
+
+  <entry id="BUILD_THREADED"  value="TRUE">
+    <type>logical</type> 
+    <valid_values>TRUE,FALSE</valid_values> 
+    <group>build_def</group> 
+    <desc>TRUE implies always build model for openmp capability
+      If FALSE, component libraries are built with OpenMP capability only if 
+      the NTHREADS_ setting for that component is greater than 1 in env_mach_pes.xml.
+      If TRUE, the component libraries are always built with OpenMP capability.</desc> 
+  </entry> 
+
+  <entry id="CALENDAR"  value="NO_LEAP">
+    <type>char</type> 
+    <valid_values>NO_LEAP,GREGORIAN</valid_values> 
+    <group>build_def</group> 
+    <desc>calendar type></desc> 
+  </entry> 
+
+  <entry id="CESMSCRATCHROOT"  value="/glade/scratch/$USER">
+    <type>char</type> 
+    <group>build_def</group> 
+    <desc>Scratch root directory for each machine. For now, primarily used for shared library builds
+      The scratchroot root directory.  Base diretory for build and run directories.</desc> 
+  </entry> 
+
+  <entry id="COMP_INTERFACE"  value="MCT">
+    <type>char</type> 
+    <valid_values>MCT,ESMF</valid_values> 
+    <group>build_def</group> 
+    <desc>use MCT or ESMF component interfaces</desc> 
+  </entry> 
+
+  <entry id="DEBUG"  value="FALSE">
+    <type>logical</type> 
+    <valid_values>TRUE,FALSE</valid_values> 
+    <group>build_def</group> 
+    <desc>TRUE implies turning on run and compile time debugging
+      Flag to turn on debugging for run time and compile time. 
+      If TRUE, compile-time debugging flags are activated that you can use to verify 
+      software robustness, such as bounds checking.
+      Important:: On IBM machines, floating point trapping is not activated for production 
+      runs (i.e., non-DEBUG), due to performance penalties associated with turning on these flags.</desc> 
+  </entry> 
+
+  <entry id="EXEROOT"  value="$CESMSCRATCHROOT/$CASE/bld">
+    <type>char</type> 
+    <group>build_def</group> 
+    <desc>Case executable root directory. 
+    (executable is $EXEROOT/cesm.exe, component libraries are in $EXEROOT/bld)
+    This is where the model builds its executable and by default runs the executable.  
+    Note that EXEROOT needs to have enough disk space for the experimental configuration
+    requirements. As an example, a model run can produce more than a terabyte of
+    data during a 100-year run, so you should set EXEROOT to scratch or
+    tmp space and frequently back up the data to a long term archiving storage device
+    For a supported machine, EXEROOT is set in /glade/p/work/pnichols/cesm1_5_alpha04c/cime/machines/config_machines.xml.
+    For a userdefined machine, EXEROOT must explicitly be set it in env_build.xml.</desc> 
+  </entry> 
+
+  <entry id="GMAKE"  value="gmake">
+    <type>char</type> 
+    <group>build_def</group> 
+    <desc>GNU make command</desc> 
+  </entry> 
+
+  <entry id="GMAKE_J"  value="8">
+    <type>integer</type> 
+    <group>build_def</group> 
+    <desc>Number of processors for gmake</desc> 
+  </entry> 
+
+  <entry id="SUPPORTED_BY"  value="cseg">
+    <type>char</type> 
+    <group>build_def</group> 
+    <desc>email address of person (or group) that supports the build and port for this machine (do not edit)></desc> 
+  </entry> 
+
+  <entry id="USE_ESMF_LIB"  value="FALSE">
+    <type>char</type> 
+    <valid_values>TRUE,FALSE</valid_values> 
+    <group>build_def</group> 
+    <desc>TRUE implies using the ESMF library specified by ESMF_LIBDIR or ESMFMKFILE</desc> 
+  </entry> 
+
+  <entry id="USE_TRILINOS"  value="FALSE">
+    <type>logical</type> 
+    <valid_values>TRUE,FALSE</valid_values> 
+    <group>build_def</group> 
+    <desc>TRUE implies linking to the trilinos library - set automatically by XXX_USE_TRILINOS options (do not edit)
+      Flag to turn on linking to the trilinos library. Currently this is
+      used by CISM. Note that trilinos is a C++ library, so setting this
+      variable to TRUE will involve the inclusion of C++ code in the model
+      executable. This is currently only supported for certain machines.</desc> 
+  </entry> 
+
+  <entry id="INCROOT"  value="$EXEROOT/lib/include">
+    <type>char</type> 
+    <group>build_derived</group> 
+    <desc>case lib include directory (set automatically to $EXEROOT/lib/include - DO NOT EDIT)</desc> 
+  </entry> 
+
+  <entry id="LIBROOT"  value="$EXEROOT/lib">
+    <type>char</type> 
+    <group>build_derived</group> 
+    <desc>case lib directory (set automatically to $EXEROOT/lib - DO NOT EDIT)</desc> 
+  </entry> 
+
+  <entry id="OBJROOT"  value="$EXEROOT">
+    <type>char</type> 
+    <group>build_derived</group> 
+    <desc>case build directory (set automatically to $EXEROOT, - DO NOT EDIT)</desc> 
+  </entry> 
+
+  <entry id="PERL5LIB"  value="/glade/apps/opt/perlmods/lib64/perl5:/glade/apps/opt/perlmods/share/perl5">
+    <type>char</type> 
+    <group>build_derived</group> 
+    <desc>Perl 5 library directory</desc> 
+  </entry> 
+
+  <entry id="SHAREDLIBROOT"  value="$EXEROOT">
+    <type>char</type> 
+    <group>build_derived</group> 
+    <desc>Shared library root, (set automatically to $EXEROOT - DO NOT EDIT)</desc> 
+  </entry> 
+
+  <entry id="SHAREDLIBROOTDIR"  value="$EXEROOT">
+    <type>char</type> 
+    <group>build_derived</group> 
+    <desc>Shared library root directory, neeed for cleaning shared builds (set automatically to $EXEROOT - DO NOT EDIT)</desc> 
+  </entry> 
+
+  <entry id="ATM_GRID"  value="1.9x2.5">
+    <type>char</type> 
+    <group>build_grid</group> 
+    <desc>atmosphere grid - DO NOT EDIT (for experts only)</desc> 
+  </entry> 
+
+  <entry id="ATM_NX"  value="144">
+    <type>integer</type> 
+    <group>build_grid</group> 
+    <desc>number of atmosphere cells in i direction - DO NOT EDIT (for experts only)</desc> 
+  </entry> 
+
+  <entry id="ATM_NY"  value="96">
+    <type>integer</type> 
+    <group>build_grid</group> 
+    <desc>number of atmosphere cells in j direction - DO NOT EDIT (for experts only)</desc> 
+  </entry> 
+
+  <entry id="GLC_NX"  value="0">
+    <type>integer</type> 
+    <group>build_grid</group> 
+    <desc>number of glc cells in i direction - DO NOT EDIT (for experts only)</desc> 
+  </entry> 
+
+  <entry id="GLC_NY"  value="0">
+    <type>integer</type> 
+    <group>build_grid</group> 
+    <desc>number of glc cells in j direction - DO NOT EDIT (for experts only)</desc> 
+  </entry> 
+
+  <entry id="GRID"  value="a%1.9x2.5_l%1.9x2.5_oi%gx1v6_r%r05_m%gx1v6_g%null_w%null">
+    <type>char</type> 
+    <group>build_grid</group> 
+    <desc>Model grid - DO NOT EDIT (for experts only)</desc> 
+  </entry> 
+
+  <entry id="ICE_GRID"  value="gx1v6">
+    <type>char</type> 
+    <group>build_grid</group> 
+    <desc>ice grid (must equal ocn grid) - DO NOT EDIT (for experts only)</desc> 
+  </entry> 
+
+  <entry id="ICE_NCAT"  value="1">
+    <type>integer</type> 
+    <group>build_grid</group> 
+    <desc>number of ice thickness categories - DO NOT EDIT (set by CICE configure)</desc> 
+  </entry> 
+
+  <entry id="ICE_NX"  value="320">
+    <type>integer</type> 
+    <group>build_grid</group> 
+    <desc>number of ice cells in i direction - DO NOT EDIT (for experts only)</desc> 
+  </entry> 
+
+  <entry id="ICE_NY"  value="384">
+    <type>integer</type> 
+    <group>build_grid</group> 
+    <desc>number of ice cells in j direction - DO NOT EDIT (for experts only)</desc> 
+  </entry> 
+
+  <entry id="LND_GRID"  value="1.9x2.5">
+    <type>char</type> 
+    <group>build_grid</group> 
+    <desc>land grid - DO NOT EDIT (for experts only)</desc> 
+  </entry> 
+
+  <entry id="LND_NX"  value="144">
+    <type>integer</type> 
+    <group>build_grid</group> 
+    <desc>number of land cells in i direction - DO NOT EDIT (for experts only)</desc> 
+  </entry> 
+
+  <entry id="LND_NY"  value="96">
+    <type>integer</type> 
+    <group>build_grid</group> 
+    <desc>number of land cells in j direction - DO NOT EDIT (for experts only)</desc> 
+  </entry> 
+
+  <entry id="MASK_GRID"  value="gx1v6">
+    <type>char</type> 
+    <group>build_grid</group> 
+    <desc>grid mask - DO NOT EDIT (for experts only)</desc> 
+  </entry> 
+
+  <entry id="OCN_GRID"  value="gx1v6">
+    <type>char</type> 
+    <group>build_grid</group> 
+    <desc>ocn grid - DO NOT EDIT (for experts only)</desc> 
+  </entry> 
+
+  <entry id="OCN_NX"  value="320">
+    <type>integer</type> 
+    <group>build_grid</group> 
+    <desc>number of ocn cells in i direction - DO NOT EDIT (for experts only)</desc> 
+  </entry> 
+
+  <entry id="OCN_NY"  value="384">
+    <type>integer</type> 
+    <group>build_grid</group> 
+    <desc>number of ocn cells in j direction - DO NOT EDIT (for experts only)</desc> 
+  </entry> 
+
+  <entry id="ROF_GRID"  value="r05">
+    <type>char</type> 
+    <group>build_grid</group> 
+    <desc>river runoff (rof) grid</desc> 
+  </entry> 
+
+  <entry id="ROF_NX"  value="720">
+    <type>integer</type> 
+    <group>build_grid</group> 
+    <desc>number of rof cells in i direction - DO NOT EDIT (for experts only)</desc> 
+  </entry> 
+
+  <entry id="ROF_NY"  value="360">
+    <type>integer</type> 
+    <group>build_grid</group> 
+    <desc>number of rof cells in j direction - DO NOT EDIT (for experts only)</desc> 
+  </entry> 
+
+  <entry id="WAV_GRID"  value="null">
+    <type>char</type> 
+    <group>build_grid</group> 
+    <desc>wave model (wav) grid</desc> 
+  </entry> 
+
+  <entry id="WAV_NX"  value="0">
+    <type>integer</type> 
+    <group>build_grid</group> 
+    <desc>number of wav cells in i direction - DO NOT EDIT (for experts only)</desc> 
+  </entry> 
+
+  <entry id="WAV_NY"  value="0">
+    <type>integer</type> 
+    <group>build_grid</group> 
+    <desc>number of wav cells in j direction - DO NOT EDIT (for experts only)</desc> 
+  </entry> 
+
+  <entry id="COMPILER"  value="intel">
+    <type>char</type> 
+    <group>build_macros</group> 
+    <desc>Machine compiler (must match one the supported compilers)
+    Set in /glade/p/work/pnichols/cesm1_5_alpha04c/cime/machines/config_machines.xml for each supported machine.
+    Must be explicitly set in env_build.xml for userdefined machine.</desc> 
+  </entry> 
+
+  <entry id="COMPILERS"  value="intel,pgi,gnu,intel15">
+    <type>char</type> 
+    <group>build_macros</group> 
+    <desc>Set in /glade/p/work/pnichols/cesm1_5_alpha04c/cime/machines/config_machines.xml for each supported machine.
+    Machine compiler (must match one the supported compilers) - ignored once Macros has been created.</desc> 
+  </entry> 
+
+  <entry id="MPILIB"  value="mpich2">
+    <type>char</type> 
+    <group>build_macros</group> 
+    <desc>mpi library (must match one of the supported libraries) - 
+    ignored once Macros has been created
+    Set in /glade/p/work/pnichols/cesm1_5_alpha04c/cime/machines/config_machines.xml for each supported machine.
+    Must be explicitly set in env_build.xml for userdefined machine.</desc> 
+  </entry> 
+
+  <entry id="MPILIBS"  value="mpich2,pempi,mpi-serial">
+    <type>char</type> 
+    <group>build_macros</group> 
+    <desc>Supported mpi libraries for target machine - set in config_machines.xml - (DO NOT EDIT)
+      Set in /glade/p/work/pnichols/cesm1_5_alpha04c/cime/machines/config_machines.xml for each supported machine.
+      Must be explicitly set in env_build.xml for userdefined machine.</desc> 
+  </entry> 
+
+  <entry id="OS"  value="LINUX">
+    <type>char</type> 
+    <group>build_macros</group> 
+    <desc>Operating system - DO NOT EDIT UNLESS for userdefined machine - ignored once Macros has been created.</desc> 
+  </entry> 
+
+  <entry id="PIO_CONFIG_OPTS"  value="">
+    <type>char</type> 
+    <group>build_macros</group> 
+    <desc>PIO configure options, see PIO configure utility for details</desc> 
+  </entry> 
+
+  <entry id="BUILD_COMPLETE"  value="TRUE">
+    <type>logical</type> 
+    <valid_values>TRUE,FALSE</valid_values> 
+    <group>build_status</group> 
+    <desc>Status output: if TRUE, models have been built successfully. (DO NOT EDIT)></desc> 
+  </entry> 
+
+  <entry id="BUILD_STATUS"  value="0">
+    <type>integer</type> 
+    <valid_values>0,1</valid_values> 
+    <group>build_status</group> 
+    <desc>Status: of prior build. (DO NOT EDIT)></desc> 
+  </entry> 
+
+  <entry id="NINST_BUILD"  value="0">
+    <type>char</type> 
+    <group>build_status</group> 
+    <desc>Status: ninst status of previous build, coded string. (DO NOT EDIT)></desc> 
+  </entry> 
+
+  <entry id="NINST_VALUE"  value="a1l1r1i1o1g1w1">
+    <type>char</type> 
+    <group>build_status</group> 
+    <desc>Status: ninst status of current case, coded string (DO NOT EDIT)></desc> 
+  </entry> 
+
+  <entry id="SMP_BUILD"  value="a1l1r1i0o1g1w1c1">
+    <type>char</type> 
+    <group>build_status</group> 
+    <desc>Status: smp status of previous build, coded string. (DO NOT EDIT)></desc> 
+  </entry> 
+
+  <entry id="SMP_VALUE"  value="a1l1r1i0o1g1w1c1">
+    <type>char</type> 
+    <group>build_status</group> 
+    <desc>Status: smp status of current case, coded string (DO NOT EDIT)></desc> 
+  </entry> 
+
+</config_definition> 

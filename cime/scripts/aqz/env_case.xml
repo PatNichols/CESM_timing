@@ -1,0 +1,336 @@
+<?xml version="1.0"?> 
+
+<config_definition> 
+
+<header>
+
+    These variables CANNOT BE CHANGED once a case has been created.
+    Invoke create_newcase again if a different grid or component
+    combination is required.
+    </header>
+
+
+<groups>
+   <group>case_comp</group> 
+   <group>case_cost</group> 
+   <group>case_def</group> 
+   <group>case_der</group> 
+   <group>case_desc</group> 
+   <group>case_last</group> 
+   <group>config_batch</group> 
+   <group>run_machine</group> 
+</groups>
+
+
+  <entry id="COMP_ATM"  value="cam">
+    <type>char</type> 
+    <valid_values>cam</valid_values> 
+    <group>case_comp</group> 
+    <desc>Name of atmospheric component</desc> 
+  </entry> 
+
+  <entry id="COMP_CPL"  value="cpl">
+    <type>char</type> 
+    <valid_values>cpl</valid_values> 
+    <group>case_comp</group> 
+    <desc>Name of coupling component</desc> 
+  </entry> 
+
+  <entry id="COMP_GLC"  value="sglc">
+    <type>char</type> 
+    <valid_values>sglc</valid_values> 
+    <group>case_comp</group> 
+    <desc>Name of land-ice component</desc> 
+  </entry> 
+
+  <entry id="COMP_ICE"  value="sice">
+    <type>char</type> 
+    <valid_values>sice</valid_values> 
+    <group>case_comp</group> 
+    <desc>Name of sea-ice component</desc> 
+  </entry> 
+
+  <entry id="COMP_LND"  value="slnd">
+    <type>char</type> 
+    <valid_values>slnd</valid_values> 
+    <group>case_comp</group> 
+    <desc>Name of land component</desc> 
+  </entry> 
+
+  <entry id="COMP_OCN"  value="aquap">
+    <type>char</type> 
+    <valid_values>aquap</valid_values> 
+    <group>case_comp</group> 
+    <desc>Name of ocean component</desc> 
+  </entry> 
+
+  <entry id="COMP_ROF"  value="srof">
+    <type>char</type> 
+    <valid_values>srof</valid_values> 
+    <group>case_comp</group> 
+    <desc>Name of river component</desc> 
+  </entry> 
+
+  <entry id="COMP_WAV"  value="swav">
+    <type>char</type> 
+    <valid_values>swav</valid_values> 
+    <group>case_comp</group> 
+    <desc>Name of wave component</desc> 
+  </entry> 
+
+  <entry id="CCSM_CCOST"  value="1">
+    <type>integer</type> 
+    <group>case_cost</group> 
+    <desc>2**n relative cost of compset where B is 1 (DO NOT EDIT)</desc> 
+  </entry> 
+
+  <entry id="CCSM_GCOST"  value="0">
+    <type>integer</type> 
+    <group>case_cost</group> 
+    <desc>2**n relative cost of grid where f19_g15 is 1 (DO NOT EDIT)</desc> 
+  </entry> 
+
+  <entry id="CCSM_MCOST"  value="0">
+    <type>integer</type> 
+    <group>case_cost</group> 
+    <desc>2**n relative cost of machine (DO NOT EDIT)</desc> 
+  </entry> 
+
+  <entry id="CASE"  value="aqz">
+    <type>char*256</type> 
+    <group>case_def</group> 
+    <desc>case name</desc> 
+  </entry> 
+
+  <entry id="CASEROOT"  value="/glade/p/work/pnichols/cesm1_5_alpha04c/cime/scripts/aqz">
+    <type>char</type> 
+    <group>case_def</group> 
+    <desc>full pathname of case</desc> 
+  </entry> 
+
+  <entry id="CIMEROOT"  value="/glade/p/work/pnichols/cesm1_5_alpha04c/cime">
+    <type>char</type> 
+    <group>case_def</group> 
+    <desc>full pathname of CIME source root directory</desc> 
+  </entry> 
+
+  <entry id="FILES_CONFIG_SPEC"  value="/glade/p/work/pnichols/cesm1_5_alpha04c/cime/config_files.xml">
+    <type>char</type> 
+    <group>case_def</group> 
+    <desc>master configuration file that specifies all relevant filenames
+    and directories to configure a case</desc> 
+  </entry> 
+
+  <entry id="MACH"  value="yellowstone">
+    <type>char</type> 
+    <group>case_def</group> 
+    <desc>Machine name</desc> 
+  </entry> 
+
+  <entry id="MACHDIR"  value="/glade/p/work/pnichols/cesm1_5_alpha04c/cime/cime_config/cesm/machines">
+    <type>char</type> 
+    <group>case_def</group> 
+    <desc>Machines directory location</desc> 
+  </entry> 
+
+  <entry id="MACHINES_FILE"  value="/glade/p/work/pnichols/cesm1_5_alpha04c/cime/cime_config/cesm/machines/config_machines.xml">
+    <type>char</type> 
+    <group>case_def</group> 
+    <desc>full pathname of file specifying supported machines location</desc> 
+  </entry> 
+
+  <entry id="SCIENCE_SUPPORT"  value="off">
+    <type>char*256</type> 
+    <valid_values>on, off</valid_values> 
+    <group>case_def</group> 
+    <desc>If set to off, this component set/ grid specification is not scientifically supported.
+    If set to on, this component set/ grid specification is scientifically supported</desc> 
+  </entry> 
+
+  <entry id="SRCROOT"  value="/glade/p/work/pnichols/cesm1_5_alpha04c">
+    <type>char</type> 
+    <group>case_def</group> 
+    <desc>full pathname of source root directory</desc> 
+  </entry> 
+
+  <entry id="CASEBUILD"  value="/glade/p/work/pnichols/cesm1_5_alpha04c/cime/scripts/aqz/Buildconf">
+    <type>char</type> 
+    <group>case_der</group> 
+    <desc>Buildconf directory location (derived variable not in namelist)</desc> 
+  </entry> 
+
+  <entry id="CASEFILE_HEADERS"  value="/glade/p/work/pnichols/cesm1_5_alpha04c/cime/cime_config/config_headers.xml">
+    <type>char</type> 
+    <group>case_der</group> 
+    <desc>contains both header and group information for all the case env_*.xml files</desc> 
+  </entry> 
+
+  <entry id="CASETOOLS"  value="/glade/p/work/pnichols/cesm1_5_alpha04c/cime/scripts/aqz/Tools">
+    <type>char</type> 
+    <group>case_der</group> 
+    <desc>Case Tools directory location (derived variable, not in namelists</desc> 
+  </entry> 
+
+  <entry id="MODEL"  value="cesm">
+    <type>char</type> 
+    <group>case_der</group> 
+    <desc>model system name</desc> 
+  </entry> 
+
+  <entry id="SCRIPTSROOT"  value="/glade/p/work/pnichols/cesm1_5_alpha04c/cime/scripts">
+    <type>char</type> 
+    <group>case_der</group> 
+    <desc>Scripts root directory location (setup automatically to /glade/p/work/pnichols/cesm1_5_alpha04c/cime/scripts- DO NOT EDIT)</desc> 
+  </entry> 
+
+  <entry id="UTILROOT"  value="/glade/p/work/pnichols/cesm1_5_alpha04c/cime/scripts/Tools">
+    <type>char</type> 
+    <group>case_der</group> 
+    <desc>Scripts root utils directory location (setup automatically to /glade/p/work/pnichols/cesm1_5_alpha04c/cime/scripts/Tools - DO NOT EDIT)</desc> 
+  </entry> 
+
+  <entry id="USER"  value="pnichols">
+    <type>char</type> 
+    <group>case_desc</group> 
+    <desc>case user name</desc> 
+  </entry> 
+
+  <entry id="COMPSET"  value="2000_CAM5_SLND_SICE_AQUAP_SROF_SGLC_SWAV">
+    <type>char</type> 
+    <group>case_last</group> 
+    <desc>Component set long name (for documentation only - DO NOT EDIT)</desc> 
+  </entry> 
+
+  <entry id="COMPSETS_SPEC_FILE"  value="/glade/p/work/pnichols/cesm1_5_alpha04c/components/cam/cime_config/config_compsets.xml">
+    <type>char</type> 
+    <group>case_last</group> 
+    <desc>file containing specification of all compsets for primary component (for documentation only - DO NOT EDIT)</desc> 
+  </entry> 
+
+  <entry id="CONFIG_ATM_FILE"  value="/glade/p/work/pnichols/cesm1_5_alpha04c/components/cam/cime_config/config_component.xml">
+    <type>char</type> 
+    <group>case_last</group> 
+    <desc>file containing specification of component specific definitions and values(for documentation only - DO NOT EDIT)</desc> 
+  </entry> 
+
+  <entry id="CONFIG_DRV_FILE"  value="/glade/p/work/pnichols/cesm1_5_alpha04c/cime/driver_cpl/cime_config/config_component.xml">
+    <type>char</type> 
+    <group>case_last</group> 
+    <desc>file containing all non-component specific case configuration variables (for documentation only - DO NOT EDIT)</desc> 
+  </entry> 
+
+  <entry id="CONFIG_GLC_FILE"  value="/glade/p/work/pnichols/cesm1_5_alpha04c/cime/components/stub_comps/sglc/cime_config/config_component.xml">
+    <type>char</type> 
+    <group>case_last</group> 
+    <desc>file containing specification of component specific definitions and values(for documentation only - DO NOT EDIT)</desc> 
+  </entry> 
+
+  <entry id="CONFIG_ICE_FILE"  value="/glade/p/work/pnichols/cesm1_5_alpha04c/cime/components/stub_comps/sice/cime_config/config_component.xml">
+    <type>char</type> 
+    <group>case_last</group> 
+    <desc>file containing specification of component specific definitions and values(for documentation only - DO NOT EDIT)</desc> 
+  </entry> 
+
+  <entry id="CONFIG_LND_FILE"  value="/glade/p/work/pnichols/cesm1_5_alpha04c/cime/components/stub_comps/slnd/cime_config/config_component.xml">
+    <type>char</type> 
+    <group>case_last</group> 
+    <desc>file containing specification of component specific definitions and values(for documentation only - DO NOT EDIT)</desc> 
+  </entry> 
+
+  <entry id="CONFIG_OCN_FILE"  value="/glade/p/work/pnichols/cesm1_5_alpha04c/components/aquap/cime_config/config_component.xml">
+    <type>char</type> 
+    <group>case_last</group> 
+    <desc>file containing specification of component specific definitions and values(for documentation only - DO NOT EDIT)</desc> 
+  </entry> 
+
+  <entry id="CONFIG_ROF_FILE"  value="/glade/p/work/pnichols/cesm1_5_alpha04c/cime/components/stub_comps/srof/cime_config/config_component.xml">
+    <type>char</type> 
+    <group>case_last</group> 
+    <desc>file containing specification of component specific definitions and values(for documentation only - DO NOT EDIT)</desc> 
+  </entry> 
+
+  <entry id="CONFIG_WAV_FILE"  value="/glade/p/work/pnichols/cesm1_5_alpha04c/cime/components/stub_comps/swav/cime_config/config_component.xml">
+    <type>char</type> 
+    <group>case_last</group> 
+    <desc>file containing specification of component specific definitions and values(for documentation only - DO NOT EDIT)</desc> 
+  </entry> 
+
+  <entry id="GRIDS_SPEC_FILE"  value="/glade/p/work/pnichols/cesm1_5_alpha04c/cime/cime_config/cesm/config_grids.xml">
+    <type>char</type> 
+    <group>case_last</group> 
+    <desc>file containing specification of all supported model grids, domains and mapping files (for documentation only - DO NOT EDIT)</desc> 
+  </entry> 
+
+  <entry id="MACHINES_SPEC_FILE"  value="/glade/p/work/pnichols/cesm1_5_alpha04c/cime/cime_config/cesm/machines/config_machines.xml">
+    <type>char</type> 
+    <group>case_last</group> 
+    <desc>file containing machine specifications for target model primary component (for documentation only - DO NOT EDIT)</desc> 
+  </entry> 
+
+  <entry id="PES_SPEC_FILE"  value="/glade/p/work/pnichols/cesm1_5_alpha04c/components/cam/cime_config/config_pes.xml">
+    <type>char</type> 
+    <group>case_last</group> 
+    <desc>file containing specification of all pe-layouts for primary component (for documentation only - DO NOT EDIT)</desc> 
+  </entry> 
+
+  <entry id="PIO_SPEC_FILE"  value="/glade/p/work/pnichols/cesm1_5_alpha04c/cime/cime_config/cesm/machines/config_pio.xml">
+    <type>char</type> 
+    <group>case_last</group> 
+    <desc>file containing specification of pio settings for target model possible machine, compiler, mpilib, compset and/or grid attributes (for documentation only - DO NOT EDIT)</desc> 
+  </entry> 
+
+  <entry id="TESTS_MODS_DIR"  value="unset">
+    <type>char</type> 
+    <group>case_last</group> 
+    <desc>directory containing test modifications for primary component tests (for documentation only - DO NOT EDIT)</desc> 
+  </entry> 
+
+  <entry id="TESTS_SPEC_FILE"  value="/glade/p/work/pnichols/cesm1_5_alpha04c/components/cam/cime_config/testdefs/testlist_cam.xml">
+    <type>char</type> 
+    <group>case_last</group> 
+    <desc>file containing specification of all system tests for primary component (for documentation only - DO NOT EDIT)</desc> 
+  </entry> 
+
+  <entry id="USER_MODS_DIR"  value="unset">
+    <type>char</type> 
+    <group>case_last</group> 
+    <desc>directory containing user modifications for primary components (for documentation only - DO NOT EDIT)</desc> 
+  </entry> 
+
+  <entry id="batch_system"  value="calderaregularcapability2:002:004:0012:00">
+    <type>char</type> 
+    <group>config_batch</group> 
+    <desc>The batch system type for this particular machine</desc> 
+  </entry> 
+
+  <entry id="module_cmd_path"  value="UNSET">
+    <type>char</type> 
+    <group>config_batch</group> 
+    <desc>The module command path for module system defined for this machine</desc> 
+  </entry> 
+
+  <entry id="module_init_path"  value="UNSET">
+    <type>char</type> 
+    <group>config_batch</group> 
+    <desc>The module initialization path for module system defined for this machine</desc> 
+  </entry> 
+
+  <entry id="module_system"  value="UNSET">
+    <type>char</type> 
+    <group>config_batch</group> 
+    <desc>The module system type defined for this machine</desc> 
+  </entry> 
+
+  <entry id="mpirun"  value="UNSET">
+    <type>char</type> 
+    <group>config_batch</group> 
+    <desc>The mpi run command associated with the machine configured batch system</desc> 
+  </entry> 
+
+  <entry id="BATCHREDIRECT"  value="&lt; ">
+    <type>char</type> 
+    <group>run_machine</group> 
+    <desc>Batch redirect character</desc> 
+  </entry> 
+
+</config_definition> 

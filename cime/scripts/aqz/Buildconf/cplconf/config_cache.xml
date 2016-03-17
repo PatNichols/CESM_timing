@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<config_definition>
+<entry id="grid"     value="a%ne30np4_l%ne30np4_oi%ne30np4_r%r05_m%gx1v6_g%null_w%null">
+<entry id="rof_grid" value="r05">
+<entry id="wav_grid" value="null">
+<entry id="atm_grid" value="ne30np4">
+<entry id="lnd_grid" value="ne30np4">
+<entry id="ocn_grid" value="ne30np4">
+</config_definition>

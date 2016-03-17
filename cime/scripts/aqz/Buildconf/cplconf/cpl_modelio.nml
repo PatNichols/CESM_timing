@@ -1,0 +1,11 @@
+&modelio
+ diri = '/glade/scratch/pnichols/aqz/bld/cpl'
+ diro = '/glade/scratch/pnichols/aqz/run'
+ logfile = 'cpl.log.151223-174232'
+/
+&pio_inparm
+ pio_numiotasks = -99
+ pio_root = -99
+ pio_stride = -99
+ pio_typename = 'nothing'
+/

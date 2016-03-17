@@ -1,0 +1,6 @@
+DONE ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel : (test finished, successful coupler log) 
+--- Test Functionality  ---:
+PASS ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.cpl.hi.nc : test compare cpl.hi (.base and .rest files) 
+PASS ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel : test functionality summary (ERS_test) 
+PASS ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.memleak
+--- Test time is 312 seconds ---

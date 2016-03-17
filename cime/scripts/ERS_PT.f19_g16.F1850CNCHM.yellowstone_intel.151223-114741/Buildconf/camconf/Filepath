@@ -1,0 +1,14 @@
+/glade/p/work/pnichols/cesm1_5_alpha04c/cime/scripts/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/SourceMods/src.cam
+/glade/p/work/pnichols/cesm1_5_alpha04c/components/cam/src/unit_drivers
+/glade/p/work/pnichols/cesm1_5_alpha04c/components/cam/src/unit_drivers/stub
+/glade/p/work/pnichols/cesm1_5_alpha04c/components/cam/src/chemistry/pp_super_fast_llnl
+/glade/p/work/pnichols/cesm1_5_alpha04c/components/cam/src/chemistry/bulk_aero
+/glade/p/work/pnichols/cesm1_5_alpha04c/components/cam/src/chemistry/aerosol
+/glade/p/work/pnichols/cesm1_5_alpha04c/components/cam/src/chemistry/mozart
+/glade/p/work/pnichols/cesm1_5_alpha04c/components/cam/src/chemistry/utils
+/glade/p/work/pnichols/cesm1_5_alpha04c/components/cam/src/physics/cam
+/glade/p/work/pnichols/cesm1_5_alpha04c/components/cam/src/dynamics/fv
+/glade/p/work/pnichols/cesm1_5_alpha04c/components/cam/src/utils/pilgrim
+/glade/p/work/pnichols/cesm1_5_alpha04c/components/cam/src/cpl
+/glade/p/work/pnichols/cesm1_5_alpha04c/components/cam/src/control
+/glade/p/work/pnichols/cesm1_5_alpha04c/components/cam/src/utils

@@ -1,0 +1,10 @@
+rm: cannot remove `/glade/p/work/pnichols/cesm1_5_alpha04c/cime/scripts/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/Buildconf/cam.input_data_list': No such file or directory
+ERROR cam.buildnml: rm /glade/p/work/pnichols/cesm1_5_alpha04c/cime/scripts/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/Buildconf/cam.input_data_list failed: 256
+Uncaught exception from user code:
+	/glade/p/work/pnichols/cesm1_5_alpha04c/components/cam/cime_config/buildnml failed 256 at ./preview_namelists line 185
+ at ./preview_namelists line 185
+Uncaught exception from user code:
+	ERROR from preview namelist - EXITING at ./case.run line 242
+ at ./case.run line 242
+	main::doPreRunChecks() called at ./case.run line 94
+	main::main() called at ./case.run line 105

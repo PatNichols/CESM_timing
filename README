@@ -1,0 +1,35 @@
+
+       The Community Earth System Model version 1.3 (CESM1.3)
+
+                     http://www2.cesm.ucar.edu
+
+       See the CESM web site for documentation and information.
+
+
+For commits to the CESM svn repo
+
+1) check out the latest ccsm4 tag but do not populate external directories
+> svn co --ignore-externals $SVNREPO/cesm1/tags/cesm1_3_alpha## my_sandbox
+> svn co -N $SVNREPO/cesm1/tags/cesm1_3_alpha## my_sandbox
+
+2) modify the file SVN_EXTERNAL_DIRECTORIES with any changes to
+component tags
+> cd  my_sandbox
+> emacs SVN_EXTERNAL_DIRECTORIES
+
+3) set the property for the external definitions - don't forget the dot at the end
+> svn propset  svn:externals  -F SVN_EXTERNAL_DIRECTORIES .
+
+4) populate your sandbox with the external files
+> svn update
+
+5) test
+
+6) document your mods
+> cp  ChangeLog_template  ChangeLog.new
+> cat  ChangeLog  >>  ChangeLog.new
+> emacs  ChangeLog.new
+> mv ChangeLog.new  ChangeLog
+
+7) copy your sandbox to a new tag in the repository
+> svn copy . $SVNREPO/ccsm4/tags/cesm1_3_alpha## -m "created tag cesm1_3_alpha##"

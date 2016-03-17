@@ -1,0 +1,4 @@
+grid_file = /glade/p/cesmdata/cseg/inputdata/share/domains/domain.ocn.gx1v6.090206.nc
+kmt_file = /glade/p/cesmdata/cseg/inputdata/share/domains/domain.ocn.gx1v6.090206.nc
+stream_fldfilename = /glade/p/cesmdata/cseg/inputdata/atm/cam/sst/sst_HadOIBl_bc_1x1_clim_pi_c101029.nc
+stream_domfilename = /glade/p/cesmdata/cseg/inputdata/ocn/docn7/domain.ocn.1x1.111007.nc

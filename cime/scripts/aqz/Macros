@@ -1,0 +1,105 @@
+#
+# COMPILER=intel
+# OS=LINUX
+# MACH=yellowstone
+#
+# Makefile Macros generated from /glade/p/work/pnichols/cesm1_5_alpha04c/cime/cime_config/cesm/machines/config_compilers.xml 
+#
+CPPDEFS+= -DFORTRANUNDERSCORE -DNO_R16 -DINTEL_MKL -DHAVE_SSE2  -DLINUX -DCPRINTEL 
+
+SLIBS+= -Wl,-rpath ${PAPI_LIB} -L${PAPI_LIB} -lpapi
+
+CFLAGS:=  -no-opt-dynamic-align -fp-model precise -std=gnu99   -xHost 
+
+CXX_LDFLAGS:= -cxxlib 
+
+CXX_LINKER:=FORTRAN
+
+FC_AUTO_R8:= -r8 
+
+FFLAGS:= -no-opt-dynamic-align  -convert big_endian -assume byterecl -ftz -traceback -assume realloc_lhs -fp-model source    -xHost 
+
+FFLAGS_NOOPT:= -O0 
+
+FIXEDFLAGS:= -fixed -132 
+
+FREEFLAGS:= -free 
+
+GPTL_CPPDEFS:= -DHAVE_NANOTIME -DBIT64 -DHAVE_VPRINTF -DHAVE_BACKTRACE -DHAVE_SLASHPROC -DHAVE_COMM_F2C -DHAVE_TIMES -DHAVE_GETTIMEOFDAY 
+
+HAS_F2008_CONTIGUOUS:=TRUE
+
+MPICC:= mpicc  
+
+MPICXX:=mpiicpc
+
+MPIFC:= mpif90 
+
+NETCDF_PATH:=$(NETCDF)
+
+PAPI_INC:= /glade/apps/opt/papi/5.3.0/intel/12.1.5/include/
+
+PAPI_LIB:=/glade/apps/opt/papi/5.3.0/intel/12.1.5/lib64 
+
+PFUNIT_PATH:=$ENV{CESMDATAROOT}/tools/pFUnit/pFUnit3.1_Intel15.0.1_MPI
+
+PIO_FILESYSTEM_HINTS:=gpfs
+
+PNETCDF_PATH:=$(PNETCDF)
+
+SCC:=$(MPICC)
+
+SCXX:= icpc 
+
+SFC:=$(MPIFC)
+
+SUPPORTS_CXX:=TRUE
+
+TRILINOS_PATH:=$(TRILINOS_PATH)
+
+ifeq ($(DEBUG), TRUE) 
+   CFLAGS += -O0 -g 
+   FFLAGS += -O0 -g -check uninit -check bounds -check pointers -fpe0 -check noarg_temp_created 
+endif
+
+ifeq ($(DEBUG), FALSE) 
+   CFLAGS += -O2 -debug minimal 
+   FFLAGS += -O2 -debug minimal 
+endif
+
+ifeq ($(compile_threaded), true) 
+   LDFLAGS += -openmp 
+   FFLAGS_NOOPT += -openmp 
+   CFLAGS += -openmp 
+   FFLAGS += -openmp 
+endif
+
+ifeq ($(MPILIB), mpich) 
+   SLIBS += -mkl=cluster 
+endif
+
+ifeq ($(MPILIB), openmpi) 
+   SLIBS += -mkl=cluster 
+endif
+
+ifeq ($(MPILIB), mpich2) 
+   SLIBS += -mkl=cluster 
+endif
+
+ifeq ($(MPILIB), mpt) 
+   SLIBS += -mkl=cluster 
+endif
+
+ifeq ($(MPILIB), mpi-serial) 
+   SLIBS += -mkl 
+   FFLAGS += -mcmodel medium 
+endif
+
+ifeq ($(MPILIB), impi) 
+   SLIBS += -mkl=cluster 
+endif
+
+ifeq ($(MODEL), pop) 
+   CPPDEFS += -D_USE_FLOW_CONTROL 
+endif
+

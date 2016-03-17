@@ -1,0 +1,111 @@
+<?xml version="1.0"?> 
+
+<config_definition> 
+
+
+
+<groups>
+   <group>test</group> 
+</groups>
+
+
+  <entry id="BASECMP_CASE"  value="UNSET">
+    <type>char</type> 
+    <group>test</group> 
+    <desc>The tagname we are comparing baselines against</desc> 
+  </entry> 
+
+  <entry id="BASEGEN_CASE"  value="UNSET">
+    <type>char</type> 
+    <group>test</group> 
+    <desc>The tagname we are comparing baselines against</desc> 
+  </entry> 
+
+  <entry id="BASELINE_NAME_CMP"  value="UNSET">
+    <type>char</type> 
+    <group>test</group> 
+    <desc>The tagname we are comparing baselines against</desc> 
+  </entry> 
+
+  <entry id="BASELINE_NAME_GEN"  value="UNSET">
+    <type>char</type> 
+    <group>test</group> 
+    <desc>The tagname we are generating baselines for</desc> 
+  </entry> 
+
+  <entry id="BASELINE_ROOT"  value="/glade/p/cesmdata/cseg/ccsm_baselines">
+    <type>char</type> 
+    <group>test</group> 
+    <desc>The directory where baselines are stored</desc> 
+  </entry> 
+
+  <entry id="CASEBASEID"  value="ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel">
+    <type>char</type> 
+    <group>test</group> 
+    <desc>Case base ID</desc> 
+  </entry> 
+
+  <entry id="CCSM_BASELINE"  value="/UNSET">
+    <type>char</type> 
+    <group>test</group> 
+    <desc>standard baselines root directory for testing</desc> 
+  </entry> 
+
+  <entry id="CCSM_CPRNC"  value="/glade/p/cesmdata/cseg/tools/cprnc/cprnc">
+    <type>char</type> 
+    <group>test</group> 
+    <desc>standard full pathname of the cprnc executable</desc> 
+  </entry> 
+
+  <entry id="CLEANUP"  value="FALSE">
+    <type>logical</type> 
+    <valid_values>TRUE,FALSE</valid_values> 
+    <group>test</group> 
+    <desc>Whether to clean the test after it is built/run</desc> 
+  </entry> 
+
+  <entry id="COMPARE_BASELINE"  value="FALSE">
+    <type>logical</type> 
+    <valid_values>TRUE,FALSE</valid_values> 
+    <group>test</group> 
+    <desc>Whether to compare the baseline</desc> 
+  </entry> 
+
+  <entry id="DESC"  value="UNSET">
+    <type>char</type> 
+    <group>test</group> 
+    <desc>Test type descriptor</desc> 
+  </entry> 
+
+  <entry id="GENERATE_BASELINE"  value="FALSE">
+    <type>logical</type> 
+    <valid_values>TRUE,FALSE</valid_values> 
+    <group>test</group> 
+    <desc>Whether to generate a baseline</desc> 
+  </entry> 
+
+  <entry id="NAME"  value="UNSET">
+    <type>char</type> 
+    <group>test</group> 
+    <desc>Test type name</desc> 
+  </entry> 
+
+  <entry id="TESTCASE"  value="ERS">
+    <type>char</type> 
+    <group>test</group> 
+    <desc>Testcase short name</desc> 
+  </entry> 
+
+  <entry id="TEST_ARGV"  value="-testname ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel -testroot /glade/p/work/pnichols/cesm1_5_alpha04c/cime/scripts ">
+    <type>char</type> 
+    <group>test</group> 
+    <desc>Arguments supplied to create_test</desc> 
+  </entry> 
+
+  <entry id="TEST_TESTID"  value="151223-114741">
+    <type>char</type> 
+    <group>test</group> 
+    <desc>supplied or computed test id</desc> 
+  </entry> 
+
+</config_definition> 

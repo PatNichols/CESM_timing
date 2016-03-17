@@ -1,0 +1,3 @@
+create_newcase -case aqz -res ne30_ne30 -compset FC5AQUAP -compiler intel -mach yellowstone
+
+

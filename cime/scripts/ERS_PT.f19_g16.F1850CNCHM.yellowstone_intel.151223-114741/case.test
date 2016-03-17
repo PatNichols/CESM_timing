@@ -1,0 +1,478 @@
+#!/bin/csh -f 
+#--------------------------------------------------------------------------------
+# This is a CESM test-specific job script
+#--------------------------------------------------------------------------------
+#BSUB  -n 180 
+#BSUB  -R "span[ptile=15]"
+#BSUB  -N  
+#BSUB  -a poe 
+#BSUB  -o cesm.stdout.%J  
+#BSUB  -e cesm.stderr.%J  
+#BSUB  -J ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741 
+
+unset cleanup  
+ 
+ cd /glade/p/work/pnichols/cesm1_5_alpha04c/cime/scripts/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741  
+
+    source .env_mach_specific.csh
+    setenv CIMEROOT `./xmlquery CIMEROOT -value`
+    # valid test output states are:  
+    #   PASS      Test passed
+    #   FAIL      Test failed
+    #   BFAIL     Baseline results do not exist for comparison
+    #   GFAIL     Baseline generation failed
+    #   GEN       Case generated
+    #   ERROR     Error underfined, test may or may not have passed
+    #   UNDEF     Undefined
+    #   BUILT     Build completed                           NOT YET IMPLEMENTED
+    #   PEND      Test submitted
+    #   RUN       Test started running, it may or may not have completed
+
+    ./Tools/check_lockedfiles || exit -1
+
+    #======================================================================
+    # (Don't) Remove test status files! create_test puts the namelist comparision 
+    # status and output into these files, respectively.  
+    #======================================================================
+    setenv CASEROOT             /glade/p/work/pnichols/cesm1_5_alpha04c/cime/scripts/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741
+    set CASE			=  ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741
+    set CASEBASEID		=  ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel
+    set TEST_TESTID		=  151223-114741 
+    set CIMEROOT		=  /glade/p/work/pnichols/cesm1_5_alpha04c/cime
+    set SCRIPTSROOT             = "/glade/p/work/pnichols/cesm1_5_alpha04c/cime/scripts";
+    set RUNDIR                  =  /glade/scratch/pnichols/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/run
+    set EXEROOT                 =  /glade/scratch/pnichols/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/bld
+    set LIBROOT                 =  /glade/scratch/pnichols/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/bld/lib
+    set DOUT_S_ROOT             =  /glade/scratch/pnichols/archive/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741
+    set BASELINEROOT		=  /glade/p/cesmdata/cseg/ccsm_baselines
+    set BASEGEN_DIR             =  /glade/p/cesmdata/cseg/ccsm_baselines/UNSET
+    set BASECMP_DIR             =  /glade/p/cesmdata/cseg/ccsm_baselines/UNSET
+    set TEST_ARGV		= '-testname ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel -testroot /glade/p/work/pnichols/cesm1_5_alpha04c/cime/scripts '
+    set GENERATE_BASELINE	=  FALSE
+    set COMPARE_BASELINE	=  FALSE
+    set BASEGEN_NAME		=  UNSET
+    set BASEGEN_CASE            =  UNSET
+    set BASECMP_NAME		=  UNSET
+    set BASECMP_CASE            =  UNSET
+    set CCSM_BASELINE           =  /UNSET
+    set CLEANUP                 =  FALSE
+
+
+    set TESTSTATUS_OUT          = $CASEROOT/TestStatus
+    set TESTSTATUS_LOG          = $CASEROOT/TestStatus.log
+    set TESTSTATUS_OUT_NLCOMP   = $CASEROOT/TestStatus.nlcomp
+
+    echo "RUN ${CASE} " >&! $TESTSTATUS_OUT
+    touch $TESTSTATUS_LOG
+
+    set sdate = `date +"%Y-%m-%d %H:%M:%S"`
+    set teststart = `date +"%Y-%m-%d %H:%M:%S"`
+    @ teststart_sec = `date -u +%s`
+
+    echo "" >>&  $TESTSTATUS_LOG
+    echo "=====================================================">>&  $TESTSTATUS_LOG
+    echo "test started $sdate"					>>&  $TESTSTATUS_LOG
+    echo "=====================================================">>&  $TESTSTATUS_LOG
+
+    echo "test started $sdate" >>&  CaseStatus
+
+    #-------------------------------------------------------------
+    # Always run non_IOP version of case
+    #-------------------------------------------------------------
+
+    unset IOP_ON
+    set testname = `./xmlquery TESTCASE -value`
+    set resubmit =  `./xmlquery RESUBMIT -value`
+    set add_iop = ''
+    set msg = "${testname}_test"
+    if( $testname == "ERR" && $resubmit <= 0 ) then
+       echo "Second pass of ERR test"
+    else    
+      # Reset all previous settings: obtain copy of original env_run.xml file
+      if ( -e env_run.orig )  then
+        cp env_run.orig env_run.xml
+      else
+         cp env_run.xml env_run.orig
+      endif
+      set resubmit =  `./xmlquery RESUBMIT -value`
+      if ( $?IOP_ON ) then
+         set add_iop = "-add_iop $IOP_TYPE"
+         set msg = "iop_${IOP_TYPE}_test"
+      endif
+   endif
+
+#======================================================================
+# Test setup:
+#======================================================================
+
+# turn on memory leak check - if comparing with baseline also 
+# compare memory highwater mark from baseline 
+set DETECT_MEMORY_LEAK
+if ($?COMPARE_BASELINE ) then
+  set COMPARE_MEMORY
+  set COMPARE_THROUGHPUT
+endif
+
+set STOP_N      = `./xmlquery STOP_N      -value`
+set STOP_OPTION = `./xmlquery STOP_OPTION -value`
+
+if (${STOP_N} < 3) then
+  echo "ERROR:  stop_n too short" >>& $TESTSTATUS_LOG
+  echo "TFAIL ${CASE} "     >&! $TESTSTATUS_OUT
+  exit -1
+endif
+
+@ stopn1 = ${STOP_N}
+@ restn1 = ${stopn1} / 2 + 1
+@ histn  = ${stopn1}
+@ stopn2 = ${stopn1} - ${restn1}
+
+#======================================================================
+# (1) Test run:
+# do an initial run test
+#======================================================================
+
+cd $CASEROOT
+
+echo "" >>& $TESTSTATUS_LOG 
+echo "initial: doing a ${stopn1} ${STOP_OPTION} initial test writing a restart at ${restn1} ${STOP_OPTION}" >>& $TESTSTATUS_LOG 
+
+./xmlchange -file env_run.xml -id CONTINUE_RUN -val FALSE
+./xmlchange -file env_run.xml -id STOP_N       -val ${stopn1}
+./xmlchange -file env_run.xml -id REST_OPTION  -val ${STOP_OPTION}
+./xmlchange -file env_run.xml -id REST_N       -val ${restn1}
+./xmlchange -file env_run.xml -id HIST_OPTION  -val ${STOP_OPTION}
+./xmlchange -file env_run.xml -id HIST_N       -val ${histn}
+
+./case.run
+if ($status != 0) then
+    echo " ERROR: case.run failed" >>& $TESTSTATUS_LOG
+    exit -1
+endif
+
+set CplLogFile = `ls -1t $RUNDIR/cpl.log* | head -1`
+if ( $?CplLogFile ) then
+    if (-e $CplLogFile) then
+       set pass = `zgrep "SUCCESSFUL TERMINATION" $CplLogFile | wc -l`
+       if ($pass != 1) then
+           echo "ERROR: coupler log $CplLogFile indicates model run failed" >>& $TESTSTATUS_LOG 
+ 	   exit -1
+       else 
+           echo "Success: test log is $CplLogFile" >>& $TESTSTATUS_LOG 
+       endif
+    endif
+else
+    echo "ERROR: no coupler log created, model run failed" >>& $TESTSTATUS_LOG
+    exit -1
+endif
+
+echo "" >>& $TESTSTATUS_LOG
+echo "moving relevant history files to suffix with command " >>& $TESTSTATUS_LOG
+echo "$SCRIPTSROOT/Tools/component_compare_move.sh -rundir $RUNDIR -testcase $CASE -suffix base $add_iop" >>& $TESTSTATUS_LOG
+echo "" >>& $TESTSTATUS_LOG
+
+$SCRIPTSROOT/Tools/component_compare_move.sh -rundir $RUNDIR -testcase $CASE -suffix "base" $add_iop
+
+#======================================================================
+# (2) Test run:
+# do a restart run
+#======================================================================
+
+cd $CASEROOT
+
+echo "restart: doing a ${stopn2} ${STOP_OPTION} restart test" >>& $TESTSTATUS_LOG 
+
+./xmlchange -file env_run.xml -id CONTINUE_RUN -val TRUE
+./xmlchange -file env_run.xml -id STOP_N       -val ${stopn2}
+./xmlchange -file env_run.xml -id REST_OPTION  -val never
+./xmlchange -file env_run.xml -id HIST_OPTION  -val ${STOP_OPTION}
+./xmlchange -file env_run.xml -id HIST_N       -val ${histn}
+
+./case.run
+if ($status != 0) then
+    echo " ERROR: case.run failed" >>& $TESTSTATUS_LOG
+    exit -1
+endif
+
+set CplLogFile = `ls -1t $RUNDIR/cpl.log* | head -1`
+if ( $?CplLogFile ) then
+    if (-e $CplLogFile) then
+       set pass = `zgrep "SUCCESSFUL TERMINATION" $CplLogFile | wc -l`
+       if ($pass != 1) then
+           echo "ERROR: coupler log $CplLogFile indicates model run failed" >>& $TESTSTATUS_LOG 
+ 	   exit -1
+       else 
+           echo "Success: test log is $CplLogFile" >>& $TESTSTATUS_LOG 
+       endif
+    endif
+else
+    echo "ERROR: no coupler log created, model run failed" >>& $TESTSTATUS_LOG
+    exit -1
+endif
+
+echo "" >>& $TESTSTATUS_LOG
+echo "moving relevant history files to suffix with command " >>& $TESTSTATUS_LOG
+echo "$SCRIPTSROOT/Tools/component_compare_move.sh -rundir $RUNDIR -testcase $CASE -suffix rest $add_iop" >>& $TESTSTATUS_LOG
+echo ""	>>& $TESTSTATUS_LOG
+
+$SCRIPTSROOT/Tools/component_compare_move.sh -rundir $RUNDIR -testcase $CASE -suffix rest $add_iop
+
+#======================================================================
+# Test status check:
+#======================================================================
+
+set CPLLOG = $CplLogFile
+
+if ! ( $?IOP_ON ) then
+    echo "DONE ${CASEBASEID} : (test finished, successful coupler log) " >&! $TESTSTATUS_OUT
+    echo "--- Test Functionality  ---:" >>& $TESTSTATUS_OUT
+endif
+
+echo "DONE ${CASEBASEID} : ($msg finished, successful coupler log) " >>& $TESTSTATUS_LOG
+echo "" >>& $TESTSTATUS_LOG
+
+echo "obtaining test functionality from history files with command "										     >>& $TESTSTATUS_LOG
+echo "$SCRIPTSROOT/Tools/component_compare_test.sh -rundir $RUNDIR -testcase $CASE -testcase_base $CASEBASEID -suffix1 base -suffix2 rest $add_iop -msg $msg">>& $TESTSTATUS_LOG
+echo ""																		     >>& $TESTSTATUS_LOG
+
+$SCRIPTSROOT/Tools/component_compare_test.sh -rundir $RUNDIR -testcase $CASE -testcase_base $CASEBASEID -suffix1 base -suffix2 rest $add_iop -msg "$msg" >>& $TESTSTATUS_OUT
+
+
+
+    #======================================================================
+    # Check for memory leaks
+    #======================================================================
+
+    if ( $?DETECT_MEMORY_LEAK ) then 
+	if ( $?CplLogFile ) then
+	   echo "Comparing memory highwater marks for consecutive days in $CplLogFile" >>& $TESTSTATUS_LOG
+	   ${SCRIPTSROOT}/Tools/check_memory.pl -file1 $CplLogFile -m 1.5 >>& $TESTSTATUS_LOG
+	   set pass = `tail -1 $TESTSTATUS_LOG | grep PASS | wc -l`
+	   if ( $pass != 0 ) then
+	      echo "PASS ${CASEBASEID}.memleak" >>& $TESTSTATUS_OUT
+	   else
+   	      echo "FAIL ${CASEBASEID}.memleak" >>& $TESTSTATUS_OUT
+	   endif
+	endif
+    endif  
+
+    #======================================================================
+    # Compare with baseline if this is a regression test
+    # NOTE:  "PASS" means both this test AND the regression test passed.  
+    # NOTE:  "FAIL" can now be caused by memory leak/creep 
+    #======================================================================
+
+    set bbb2 = ""
+
+    if ( "$COMPARE_BASELINE" == "TRUE" ) then
+       echo "--- Baseline Comparison ---: " >>& $TESTSTATUS_OUT
+
+       set continue_compare = 'yes'
+       if ! ( -d $BASELINEROOT ) then
+          echo "WARNING:  directory $BASELINEROOT does not exist" >>& $TESTSTATUS_LOG
+	  set continue_compare = 'no'
+       endif
+
+       if ("$continue_compare" == 'yes') then
+          if ! ( -d $BASECMP_DIR ) then
+	     echo "WARNING: directory $BASECMP_DIR does not exist" >>& $TESTSTATUS_LOG
+	     echo "BFAIL (baseline directory $BASECMP_DIR does not exist)" >>& $TESTSTATUS_OUT
+	     set continue_compare = 'no'
+	  endif
+       endif
+
+       if ("$continue_compare" == 'yes') then
+          # compare component history fiels with baseline
+          ${SCRIPTSROOT}/Tools/component_compgen_baseline.sh -baseline_dir $BASECMP_DIR -test_dir $RUNDIR -compare_tag $BASECMP_NAME -testcase $CASE -testcase_base $CASEBASEID -msg "baseline: compare .base file with $BASECMP_NAME file">>& $TESTSTATUS_OUT
+
+	  if (-e $BASECMP_DIR/${TESTSTATUS_LOG:t}) then
+	     set bbb1 = `grep perf $BASECMP_DIR/${TESTSTATUS_LOG:t} | grep CHECK | grep -v baseline`
+	     set bbb2 = `echo $bbb1 baseline`
+	  endif
+
+	  if( $?COMPARE_MEMORY ) then 
+	     echo ""								      >>& $TESTSTATUS_LOG 
+	     echo "Comparing pes max memory value with baseline pes max memory value" >>& $TESTSTATUS_LOG 
+	     echo "Comparing $CplLogFile and ${BASECMP_DIR}/cpl.log"		      >>& $TESTSTATUS_LOG
+	     ${SCRIPTSROOT}/Tools/check_memory.pl -file1 $CplLogFile -file2 ${BASECMP_DIR}/cpl.log -m 1 -mbase 20 >>& $TESTSTATUS_LOG 
+	     set pass = `tail -1 $TESTSTATUS_LOG | grep PASS | wc -l`
+	     if ( $pass != 0 ) then
+	        echo "PASS ${CASEBASEID}.memcomp.${BASECMP_NAME} " >>& $TESTSTATUS_OUT
+		echo "result of memcomp  test is pass" >>& $TESTSTATUS_LOG
+	     else
+	        echo "FAIL ${CASEBASEID}.memcomp.${BASECMP_NAME} " >>& $TESTSTATUS_OUT
+                echo "result of memcomp  test is fail" >>& $TESTSTATUS_LOG
+	     endif
+   	     echo "" $TESTSTATUS_LOG 
+	  endif
+       endif  
+
+       if ( $?COMPARE_THROUGHPUT ) then
+          echo ""										>>& $TESTSTATUS_LOG 
+	  echo "Comparing throughput value with baseline throughput value"		        >>& $TESTSTATUS_LOG
+	  echo "Comparing $CplLogFile and ${BASECMP_DIR}/cpl.log"			        >>& $TESTSTATUS_LOG
+	  ${SCRIPTSROOT}/Tools/compare_throughput.pl -file1 $CplLogFile -file2 ${BASECMP_DIR}/cpl.log >>& $TESTSTATUS_LOG 
+	  set pass = `tail -1 $TESTSTATUS_LOG | grep PASS | wc -l`
+	  if ( $pass != 0 ) then
+	      echo "PASS ${CASEBASEID}.tputcomp.${BASECMP_NAME} " >>& $TESTSTATUS_OUT
+              echo "result of throughput compare test is pass"    >>& $TESTSTATUS_LOG
+	  else
+	      echo "FAIL ${CASEBASEID}.tputcomp.${BASECMP_NAME} " >>& $TESTSTATUS_OUT
+              echo "result of throughput compare test is fail"    >>& $TESTSTATUS_LOG
+          endif
+	  echo "" >>& $TESTSTATUS_LOG 
+      endif
+    endif
+
+    #======================================================================
+    # Generate new baseline for regression testing
+    #======================================================================
+
+    if ( "$GENERATE_BASELINE" == "TRUE" ) then
+       echo "--- Baseline Generation ---: " >>& $TESTSTATUS_OUT
+
+       set continue_generate = 'yes'
+       if ! ( -d $BASELINEROOT ) then
+          echo "ERROR:  $BASELINEROOT does not exist " >>& $TESTSTATUS_LOG
+	  echo "GFAIL:  baseline root directory $BASELINEROOT does not exist " >>& $TESTSTATUS_OUT
+	  set continue_generate = 'no'
+       endif
+
+       if ("$continue_generate" == 'yes') then
+          if  ! ( -d $BASEGEN_DIR ) then
+	     echo "ERROR:  $BASEGEN_DIR does not exist " >>& $TESTSTATUS_LOG
+	     echo "GFAIL:  baseline generate test directory does $BASEGEN_DIR not exist" >>& $TESTSTATUS_OUT
+	     set continue_generate = 'no'
+	  endif
+       endif
+
+       if ("$continue_generate" == 'yes') then
+          if ( -e $BASEGEN_DIR/cpl.log ) then
+	     echo "WARNING:  component model data already exists - WILL NOT OVERWRITE " >>& $TESTSTATUS_LOG
+	     echo "" >>& $TESTSTATUS_LOG
+	     echo "GFAIL:  component model data already exists " >>& $TESTSTATUS_OUT
+	     set continue_generate = 'no'
+	  endif
+       endif
+
+       if ("$continue_generate" == 'yes') then
+          ${SCRIPTSROOT}/Tools/component_compgen_baseline.sh -baseline_dir $BASEGEN_DIR -test_dir $RUNDIR -generate_tag $BASEGEN_NAME -testcase $CASE -testcase_base $CASEBASEID >>& $TESTSTATUS_OUT
+
+	  # save last coupler log file to baseline directory
+	  cp $CplLogFile $BASEGEN_DIR/cpl.log || echo "WARNING: could not copy $CplLogFile to $BASEGEN_DIR " >>& $TESTSTATUS_LOG
+	  chmod ug+w,a+r $BASEGEN_DIR/cpl.log
+	  
+	  if ($?CPLPROF_GENCMP) then # this variable is set in the test script
+	     cp $CPLPROF_GENCMP $BASEGEN_DIR/timing_summary || echo "WARNING: could not copy $CPLPROF_GENCMP to $BASEGEN_CPLPROFFILE" >>& $TESTSTATUS_LOG
+	     chmod ug+w,a+r $BASEGEN_DIR/timing_summary
+	  endif
+
+	  echo "Generated coupler log and relevant component history files in $BASEGEN_DIR" >>& $TESTSTATUS_LOG
+	  echo "PASS ${CASEBASEID}.generate.${BASEGEN_NAME} : generate coupler logs" >>& $TESTSTATUS_OUT
+       endif
+   endif
+
+   #======================================================================
+   # Summary output
+   #======================================================================
+
+   if ( $?CplLogFile) then
+      if (-e $CplLogFile) then
+
+         echo "CplLogFile is $CplLogFile" >>& $TESTSTATUS_LOG
+	 if( "$CplLogFile" =~ *gz ) then
+	    gunzip -c $CplLogFile | tail -10	>>& $TESTSTATUS_LOG
+	 else
+  	    tail -10 $CplLogFile >>& $TESTSTATUS_LOG
+	 endif
+
+	 set npes = ""
+	 set tag  = "unknown"
+	 if ( $?TOTALPES)     set npes = `echo $TOTALPES`
+	 if ( $?BASEGEN_NAME) set tag  = `echo $BASEGEN_NAME`
+
+	 set tput = `zgrep "# simulated years "    $CplLogFile | cut -c 63-72`
+	 set memh = `zgrep "max memory highwater"  $CplLogFile | cut -c 63-72`
+	 set memr = `zgrep "max memory last usage" $CplLogFile | cut -c 63-72`
+	 
+	 echo "$bbb2" >>& $TESTSTATUS_LOG
+	 echo "CHECK ${CASEBASEID}.perf npes=$npes tput=$tput memh=$memh memr=$memr tag=$tag" >>& $TESTSTATUS_LOG
+	 if ( "${CASEBASEID}" =~ ERT* || "${CASEBASEID}" =~ PFS* ) then
+            if ( "$bbb2" !~ "") then
+               echo "$bbb2" >>& $TESTSTATUS_OUT
+	    endif
+	    echo "CHECK ${CASEBASEID}.perf npes=$npes tput=$tput memh=$memh memr=$memr tag=$tag" >>& $TESTSTATUS_OUT 
+	 endif
+	 echo " " >>& $TESTSTATUS_LOG
+      endif
+   endif
+
+   set memleak		 = `grep "memleak ="		$TESTSTATUS_LOG | cut -c 1-15`
+   set pesmaxmem_incr	 = `grep "pesmaxmem_incr ="	$TESTSTATUS_LOG | cut -c 1-21`
+   set tput_decr	 = `grep "tput_decr ="		$TESTSTATUS_LOG | cut -c 1-21`
+   set tput_percent_decr = `grep "tput_percent_decr ="	$TESTSTATUS_LOG | cut -c 1-24`
+   
+   if ( "$memleak" !~ "" || "$pesmaxmem_incr" != "" || "$tput_decr" !~ "" || "$tput_percent_decr" !~ "" ) then
+      echo "COMMENT $memleak $pesmaxmem_incr $tput_decr $tput_percent_decr"  >>& $TESTSTATUS_OUT
+   endif
+
+   #
+   # summarize failed differences if any
+   ${SCRIPTSROOT}/Tools/component_write_comparefail.pl $RUNDIR $TESTSTATUS_LOG
+
+   # determine and output test time
+   @ testend_sec = `date -u +%s`
+   @ testtime = $testend_sec - $teststart_sec
+   echo "--- Test time is $testtime seconds ---" >>& $TESTSTATUS_OUT
+
+   #======================================================================
+   # Clean up
+   #======================================================================
+
+   if ($?cleanup ) then
+      set fail_number = `grep compare_hist $TESTSTATUS_OUT | grep -w FAIL | wc`
+      if ($fail_number != 0) then 
+         rm -r -f $EXEROOT*/atm          >& /dev/null
+	 rm -r -f $EXEROOT*/lnd          >& /dev/null
+	 rm -r -f $EXEROOT*/ocn          >& /dev/null
+	 rm -r -f $EXEROOT*/ice          >& /dev/null
+	 rm -r -f $EXEROOT*/glc          >& /dev/null
+	 rm -r -f $EXEROOT*/wav          >& /dev/null
+	 rm -r -f $EXEROOT*/rof          >& /dev/null
+	 rm -r -f $EXEROOT*/cpl          >& /dev/null
+	 rm -r -f $EXEROOT*/cesm         >& /dev/null
+	 rm -r -f $EXEROOT*/csm_share    >& /dev/null
+	 rm -r -f $EXEROOT*/mct          >& /dev/null
+	 rm -r -f $EXEROOT*/pio          >& /dev/null
+	 rm -r -f $EXEROOT*/gptl         >& /dev/null
+	 rm -r -f $LIBROOT               >& /dev/null
+	 rm    -f $EXEROOT*/*/*.nc       >& /dev/null
+	 rm    -f $EXEROOT*/*/*/*.nc     >& /dev/null
+	 rm -r -f $DOUT_S_ROOT*          >& /dev/null
+	 rm       $RUNDIR/*nc            >& /dev/null
+	 echo "NOTE: Test passed, clean up done."  >>& $TESTSTATUS_LOG
+      else
+         echo "NOTE: Compare test failed, clean up NOT done."  >>& $TESTSTATUS_LOG
+      endif
+   else
+      echo "NOTE:  At user request, clean up not done.  Use the following" >>& $TESTSTATUS_LOG
+      echo "       commands to clean up by hand:" >>& $TESTSTATUS_LOG
+      echo "         rm -rf $EXEROOT" >>& $TESTSTATUS_LOG
+   endif
+
+   if ( "$GENERATE_BASELINE" == "TRUE" ) then
+      if (-e $BASEGEN_DIR) then
+         cp $TESTSTATUS_LOG ${BASEGEN_DIR}/${TESTSTATUS_LOG:t}
+         chmod ug+w,a+r ${BASEGEN_DIR}/${TESTSTATUS_LOG:t}
+       endif
+   endif
+
+   if ( -e $TESTSTATUS_OUT_NLCOMP ) then
+      cat $TESTSTATUS_OUT_NLCOMP >>& $TESTSTATUS_OUT
+      # Do NOT delete the nlcomp file, so that the test can be "rerun" ##
+      ###rm $TESTSTATUS_OUT_NLCOMP  #####################################
+   endif
+
+   set sdate = `date +"%Y-%m-%d %H:%M:%S"`
+   echo "test completed $sdate" >>&  CaseStatus
+

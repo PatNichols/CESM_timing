@@ -1,0 +1,295 @@
+
+=====================================================
+test started 2015-12-23 13:50:50
+=====================================================
+
+=====================================================
+test started 2015-12-23 13:50:50
+=====================================================
+
+
+initial: doing a 11 ndays initial test writing a restart at 6 ndays
+initial: doing a 11 ndays initial test writing a restart at 6 ndays
+ ERROR: case.run failed
+Success: test log is /glade/scratch/pnichols/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/run/cpl.log.151223-135054.gz
+
+moving relevant history files to suffix with command 
+/glade/p/work/pnichols/cesm1_5_alpha04c/cime/scripts/Tools/component_compare_move.sh -rundir /glade/scratch/pnichols/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/run -testcase ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741 -suffix base 
+
+restart: doing a 5 ndays restart test
+Success: test log is /glade/scratch/pnichols/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/run/cpl.log.151223-135331.gz
+
+moving relevant history files to suffix with command 
+/glade/p/work/pnichols/cesm1_5_alpha04c/cime/scripts/Tools/component_compare_move.sh -rundir /glade/scratch/pnichols/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/run -testcase ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741 -suffix rest 
+
+DONE ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel : (ERS_test finished, successful coupler log) 
+
+obtaining test functionality from history files with command 
+/glade/p/work/pnichols/cesm1_5_alpha04c/cime/scripts/Tools/component_compare_test.sh -rundir /glade/scratch/pnichols/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/run -testcase ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741 -testcase_base ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel -suffix1 base -suffix2 rest  -msg ERS_test
+
+Comparing memory highwater marks for consecutive days in /glade/scratch/pnichols/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/run/cpl.log.151223-135331.gz
+not a memory leak
+PASS
+CplLogFile is /glade/scratch/pnichols/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/run/cpl.log.151223-135331.gz
+(seq_mct_drv): ===============  # simulated days (this run) =     5.000  ===============
+(seq_mct_drv): ===============  compute time (hrs)          =     0.010  ===============
+(seq_mct_drv): ===============  # simulated years / cmp-day =    32.387  ===============
+(seq_mct_drv): ===============  pes min memory highwater  (MB)  317.410  ===============
+(seq_mct_drv): ===============  pes max memory highwater  (MB)  411.820  ===============
+(seq_mct_drv): ===============  pes min memory last usage (MB) 2469.950  ===============
+(seq_mct_drv): ===============  pes max memory last usage (MB) 2576.430  ===============
+
+
+
+
+CHECK ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.perf npes= tput=32.387 memh=411.820 memr=2576.430 tag=UNSET
+ 
+---summarizing more details of test failures if any: --- 
+
+
+---finished summarizing more details of test failures: ---- 
+
+ test completed 2015-12-23 13:55:55
+NOTE:  At user request, clean up not done.  Use the following
+       commands to clean up by hand:
+         rm -rf /glade/scratch/pnichols/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/bld
+
+=====================================================
+test started 2016-02-01 16:22:03
+=====================================================
+
+initial: doing a 11 ndays initial test writing a restart at 6 ndays
+Success: test log is /glade/scratch/pnichols/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/run/cpl.log.160201-162206.gz
+
+moving relevant history files to suffix with command 
+/glade/p/work/pnichols/cesm1_5_alpha04c/cime/scripts/Tools/component_compare_move.sh -rundir /glade/scratch/pnichols/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/run -testcase ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741 -suffix base 
+
+restart: doing a 5 ndays restart test
+Success: test log is /glade/scratch/pnichols/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/run/cpl.log.160201-162447.gz
+
+moving relevant history files to suffix with command 
+/glade/p/work/pnichols/cesm1_5_alpha04c/cime/scripts/Tools/component_compare_move.sh -rundir /glade/scratch/pnichols/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/run -testcase ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741 -suffix rest 
+
+DONE ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel : (ERS_test finished, successful coupler log) 
+
+obtaining test functionality from history files with command 
+/glade/p/work/pnichols/cesm1_5_alpha04c/cime/scripts/Tools/component_compare_test.sh -rundir /glade/scratch/pnichols/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/run -testcase ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741 -testcase_base ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel -suffix1 base -suffix2 rest  -msg ERS_test
+
+Comparing memory highwater marks for consecutive days in /glade/scratch/pnichols/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/run/cpl.log.160201-162447.gz
+not a memory leak
+PASS
+CplLogFile is /glade/scratch/pnichols/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/run/cpl.log.160201-162447.gz
+(seq_mct_drv): ===============  # simulated days (this run) =     5.000  ===============
+(seq_mct_drv): ===============  compute time (hrs)          =     0.010  ===============
+(seq_mct_drv): ===============  # simulated years / cmp-day =    33.700  ===============
+(seq_mct_drv): ===============  pes min memory highwater  (MB)  317.568  ===============
+(seq_mct_drv): ===============  pes max memory highwater  (MB)  407.969  ===============
+(seq_mct_drv): ===============  pes min memory last usage (MB) 2470.027  ===============
+(seq_mct_drv): ===============  pes max memory last usage (MB) 2576.430  ===============
+
+
+
+
+CHECK ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.perf npes= tput=33.700 memh=407.969 memr=2576.430 tag=UNSET
+ 
+---summarizing more details of test failures if any: --- 
+
+
+---finished summarizing more details of test failures: ---- 
+
+ test completed 2016-02-01 16:27:11
+NOTE:  At user request, clean up not done.  Use the following
+       commands to clean up by hand:
+         rm -rf /glade/scratch/pnichols/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/bld
+
+=====================================================
+test started 2016-02-04 14:49:35
+=====================================================
+
+initial: doing a 11 ndays initial test writing a restart at 6 ndays
+Success: test log is /glade/scratch/pnichols/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/run/cpl.log.160204-144939.gz
+
+moving relevant history files to suffix with command 
+/glade/p/work/pnichols/cesm1_5_alpha04c/cime/scripts/Tools/component_compare_move.sh -rundir /glade/scratch/pnichols/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/run -testcase ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741 -suffix base 
+
+restart: doing a 5 ndays restart test
+Success: test log is /glade/scratch/pnichols/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/run/cpl.log.160204-145212.gz
+
+moving relevant history files to suffix with command 
+/glade/p/work/pnichols/cesm1_5_alpha04c/cime/scripts/Tools/component_compare_move.sh -rundir /glade/scratch/pnichols/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/run -testcase ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741 -suffix rest 
+
+DONE ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel : (ERS_test finished, successful coupler log) 
+
+obtaining test functionality from history files with command 
+/glade/p/work/pnichols/cesm1_5_alpha04c/cime/scripts/Tools/component_compare_test.sh -rundir /glade/scratch/pnichols/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/run -testcase ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741 -testcase_base ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel -suffix1 base -suffix2 rest  -msg ERS_test
+
+Comparing memory highwater marks for consecutive days in /glade/scratch/pnichols/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/run/cpl.log.160204-145212.gz
+not a memory leak
+PASS
+CplLogFile is /glade/scratch/pnichols/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/run/cpl.log.160204-145212.gz
+(seq_mct_drv): ===============  # simulated days (this run) =     5.000  ===============
+(seq_mct_drv): ===============  compute time (hrs)          =     0.010  ===============
+(seq_mct_drv): ===============  # simulated years / cmp-day =    34.024  ===============
+(seq_mct_drv): ===============  pes min memory highwater  (MB)  317.623  ===============
+(seq_mct_drv): ===============  pes max memory highwater  (MB)  380.941  ===============
+(seq_mct_drv): ===============  pes min memory last usage (MB) 2472.343  ===============
+(seq_mct_drv): ===============  pes max memory last usage (MB) 2576.496  ===============
+
+
+
+
+CHECK ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.perf npes= tput=34.024 memh=380.941 memr=2576.496 tag=UNSET
+ 
+---summarizing more details of test failures if any: --- 
+
+
+---finished summarizing more details of test failures: ---- 
+
+ test completed 2016-02-04 14:54:38
+NOTE:  At user request, clean up not done.  Use the following
+       commands to clean up by hand:
+         rm -rf /glade/scratch/pnichols/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/bld
+
+=====================================================
+test started 2016-02-10 16:11:28
+=====================================================
+
+initial: doing a 11 ndays initial test writing a restart at 6 ndays
+Success: test log is /glade/scratch/pnichols/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/run/cpl.log.160210-161131.gz
+
+moving relevant history files to suffix with command 
+/glade/p/work/pnichols/cesm1_5_alpha04c/cime/scripts/Tools/component_compare_move.sh -rundir /glade/scratch/pnichols/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/run -testcase ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741 -suffix base 
+
+restart: doing a 5 ndays restart test
+Success: test log is /glade/scratch/pnichols/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/run/cpl.log.160210-161437.gz
+
+moving relevant history files to suffix with command 
+/glade/p/work/pnichols/cesm1_5_alpha04c/cime/scripts/Tools/component_compare_move.sh -rundir /glade/scratch/pnichols/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/run -testcase ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741 -suffix rest 
+
+DONE ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel : (ERS_test finished, successful coupler log) 
+
+obtaining test functionality from history files with command 
+/glade/p/work/pnichols/cesm1_5_alpha04c/cime/scripts/Tools/component_compare_test.sh -rundir /glade/scratch/pnichols/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/run -testcase ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741 -testcase_base ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel -suffix1 base -suffix2 rest  -msg ERS_test
+
+Comparing memory highwater marks for consecutive days in /glade/scratch/pnichols/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/run/cpl.log.160210-161437.gz
+not a memory leak
+PASS
+CplLogFile is /glade/scratch/pnichols/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/run/cpl.log.160210-161437.gz
+(seq_mct_drv): ===============  # simulated days (this run) =     5.000  ===============
+(seq_mct_drv): ===============  compute time (hrs)          =     0.010  ===============
+(seq_mct_drv): ===============  # simulated years / cmp-day =    33.587  ===============
+(seq_mct_drv): ===============  pes min memory highwater  (MB)  316.338  ===============
+(seq_mct_drv): ===============  pes max memory highwater  (MB)  391.492  ===============
+(seq_mct_drv): ===============  pes min memory last usage (MB) 2469.896  ===============
+(seq_mct_drv): ===============  pes max memory last usage (MB) 2576.500  ===============
+
+
+
+
+CHECK ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.perf npes= tput=33.587 memh=391.492 memr=2576.500 tag=UNSET
+ 
+---summarizing more details of test failures if any: --- 
+
+
+---finished summarizing more details of test failures: ---- 
+
+ test completed 2016-02-10 16:17:18
+NOTE:  At user request, clean up not done.  Use the following
+       commands to clean up by hand:
+         rm -rf /glade/scratch/pnichols/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/bld
+
+=====================================================
+test started 2016-02-11 11:22:42
+=====================================================
+
+initial: doing a 11 ndays initial test writing a restart at 6 ndays
+Success: test log is /glade/scratch/pnichols/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/run/cpl.log.160211-112246.gz
+
+moving relevant history files to suffix with command 
+/glade/p/work/pnichols/cesm1_5_alpha04c/cime/scripts/Tools/component_compare_move.sh -rundir /glade/scratch/pnichols/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/run -testcase ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741 -suffix base 
+
+restart: doing a 5 ndays restart test
+Success: test log is /glade/scratch/pnichols/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/run/cpl.log.160211-112521.gz
+
+moving relevant history files to suffix with command 
+/glade/p/work/pnichols/cesm1_5_alpha04c/cime/scripts/Tools/component_compare_move.sh -rundir /glade/scratch/pnichols/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/run -testcase ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741 -suffix rest 
+
+DONE ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel : (ERS_test finished, successful coupler log) 
+
+obtaining test functionality from history files with command 
+/glade/p/work/pnichols/cesm1_5_alpha04c/cime/scripts/Tools/component_compare_test.sh -rundir /glade/scratch/pnichols/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/run -testcase ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741 -testcase_base ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel -suffix1 base -suffix2 rest  -msg ERS_test
+
+Comparing memory highwater marks for consecutive days in /glade/scratch/pnichols/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/run/cpl.log.160211-112521.gz
+not a memory leak
+PASS
+CplLogFile is /glade/scratch/pnichols/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/run/cpl.log.160211-112521.gz
+(seq_mct_drv): ===============  # simulated days (this run) =     5.000  ===============
+(seq_mct_drv): ===============  compute time (hrs)          =     0.010  ===============
+(seq_mct_drv): ===============  # simulated years / cmp-day =    33.247  ===============
+(seq_mct_drv): ===============  pes min memory highwater  (MB)  316.612  ===============
+(seq_mct_drv): ===============  pes max memory highwater  (MB)  383.273  ===============
+(seq_mct_drv): ===============  pes min memory last usage (MB) 2470.088  ===============
+(seq_mct_drv): ===============  pes max memory last usage (MB) 2575.840  ===============
+
+
+
+
+CHECK ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.perf npes= tput=33.247 memh=383.273 memr=2575.840 tag=UNSET
+ 
+---summarizing more details of test failures if any: --- 
+
+
+---finished summarizing more details of test failures: ---- 
+
+ test completed 2016-02-11 11:27:49
+NOTE:  At user request, clean up not done.  Use the following
+       commands to clean up by hand:
+         rm -rf /glade/scratch/pnichols/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/bld
+
+=====================================================
+test started 2016-02-11 14:52:18
+=====================================================
+
+initial: doing a 11 ndays initial test writing a restart at 6 ndays
+Success: test log is /glade/scratch/pnichols/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/run/cpl.log.160211-145221.gz
+
+moving relevant history files to suffix with command 
+/glade/p/work/pnichols/cesm1_5_alpha04c/cime/scripts/Tools/component_compare_move.sh -rundir /glade/scratch/pnichols/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/run -testcase ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741 -suffix base 
+
+restart: doing a 5 ndays restart test
+Success: test log is /glade/scratch/pnichols/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/run/cpl.log.160211-145501.gz
+
+moving relevant history files to suffix with command 
+/glade/p/work/pnichols/cesm1_5_alpha04c/cime/scripts/Tools/component_compare_move.sh -rundir /glade/scratch/pnichols/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/run -testcase ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741 -suffix rest 
+
+DONE ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel : (ERS_test finished, successful coupler log) 
+
+obtaining test functionality from history files with command 
+/glade/p/work/pnichols/cesm1_5_alpha04c/cime/scripts/Tools/component_compare_test.sh -rundir /glade/scratch/pnichols/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/run -testcase ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741 -testcase_base ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel -suffix1 base -suffix2 rest  -msg ERS_test
+
+Comparing memory highwater marks for consecutive days in /glade/scratch/pnichols/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/run/cpl.log.160211-145501.gz
+not a memory leak
+PASS
+CplLogFile is /glade/scratch/pnichols/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/run/cpl.log.160211-145501.gz
+(seq_mct_drv): ===============  # simulated days (this run) =     5.000  ===============
+(seq_mct_drv): ===============  compute time (hrs)          =     0.010  ===============
+(seq_mct_drv): ===============  # simulated years / cmp-day =    33.183  ===============
+(seq_mct_drv): ===============  pes min memory highwater  (MB)  319.594  ===============
+(seq_mct_drv): ===============  pes max memory highwater  (MB)  409.023  ===============
+(seq_mct_drv): ===============  pes min memory last usage (MB) 2472.293  ===============
+(seq_mct_drv): ===============  pes max memory last usage (MB) 2576.453  ===============
+
+
+
+
+CHECK ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.perf npes= tput=33.183 memh=409.023 memr=2576.453 tag=UNSET
+ 
+---summarizing more details of test failures if any: --- 
+
+
+---finished summarizing more details of test failures: ---- 
+
+ test completed 2016-02-11 14:57:30
+NOTE:  At user request, clean up not done.  Use the following
+       commands to clean up by hand:
+         rm -rf /glade/scratch/pnichols/ERS_PT.f19_g16.F1850CNCHM.yellowstone_intel.151223-114741/bld
